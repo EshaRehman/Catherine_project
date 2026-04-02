@@ -41,8 +41,6 @@ export function CreateEvent() {
 
   const [name, setName] = useState('');
   const [templateIds, setTemplateIds] = useState([]);
-  const [countdownSec, setCountdownSec] = useState(3);
-  const [status, setStatus] = useState('active');
   const [formError, setFormError] = useState('');
 
   /* Reset when switching create ↔ edit only (not when `events` updates during create) */
@@ -50,8 +48,6 @@ export function CreateEvent() {
     if (eventFormId) return;
     setName('');
     setTemplateIds([]);
-    setCountdownSec(3);
-    setStatus('active');
     setFormError('');
   }, [eventFormId]);
 
@@ -61,8 +57,6 @@ export function CreateEvent() {
     if (!ex) return;
     setName(ex.name || '');
     setTemplateIds(ex.templateIds?.length ? [...ex.templateIds] : []);
-    setCountdownSec(ex.countdownSec ?? 3);
-    setStatus(ex.status || 'active');
     setFormError('');
   }, [eventFormId, events]);
 
@@ -87,8 +81,8 @@ export function CreateEvent() {
       id: existing?.id || uid(),
       name: name.trim(),
       templateIds: [...templateIds],
-      countdownSec: Math.max(1, Math.min(10, Number(countdownSec) || 3)),
-      status,
+      countdownSec: Math.max(1, Math.min(10, Number(existing?.countdownSec) || 3)),
+      status: existing?.status || 'active',
       createdAt: existing?.createdAt || new Date().toISOString(),
     };
     saveEvent(ev);
@@ -144,32 +138,6 @@ export function CreateEvent() {
               onToggle={() => toggleTpl(t.id)}
             />
           ))}
-        </div>
-
-        <div className="section-title">Optional settings</div>
-        <div className="field">
-          <label htmlFor="ev-count">Countdown (seconds)</label>
-          <input
-            id="ev-count"
-            className="input"
-            type="number"
-            min={1}
-            max={10}
-            value={countdownSec}
-            onChange={(e) => setCountdownSec(e.target.value)}
-          />
-        </div>
-        <div className="field">
-          <label htmlFor="ev-status">Status</label>
-          <select
-            id="ev-status"
-            className="select"
-            value={status}
-            onChange={(e) => setStatus(e.target.value)}
-          >
-            <option value="active">Active</option>
-            <option value="draft">Draft</option>
-          </select>
         </div>
 
         <div style={{ display: 'flex', gap: 12, marginTop: 28 }}>

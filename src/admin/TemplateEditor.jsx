@@ -9,26 +9,17 @@ const FONTS = [
   { label: 'Impact', value: 'Impact, Haettenschweiler, sans-serif' },
 ];
 
-const FONT_SIZE_OPTIONS = (() => {
-  const o = [];
-  for (let px = 12; px <= 96; px += 2) o.push(px);
-  return o;
-})();
-
-/** Logo scale as percent (matches former slider 8–45%) */
-const LOGO_SCALE_OPTIONS = (() => {
-  const o = [];
-  for (let p = 8; p <= 45; p += 1) o.push(p);
-  return o;
-})();
-
 function normalizeFontSizePx(n) {
   const v = Math.min(96, Math.max(12, Math.round(Number(n) || 42)));
   const snapped = Math.round((v - 12) / 2) * 2 + 12;
   return Math.min(96, Math.max(12, snapped));
 }
 
-function FileUploadRow({ id, title, onChange }) {
+function clampInt(value, min, max) {
+  return Math.min(max, Math.max(min, Math.round(Number(value) || 0)));
+}
+
+function FileUploadRow({ id, title, cta = 'Choose file', subtitle, onChange }) {
   return (
     <div className="field field--full">
       <div className="field-heading">{title}</div>
@@ -42,9 +33,125 @@ function FileUploadRow({ id, title, onChange }) {
         />
         <span className="file-upload__face">
           <span className="file-upload__glyph" aria-hidden />
-          Choose file
+          <span className="file-upload__copy">
+            <strong>{cta}</strong>
+            {subtitle ? <small>{subtitle}</small> : null}
+          </span>
         </span>
       </label>
+    </div>
+  );
+}
+
+function SliderWithInput({
+  id,
+  label,
+  value,
+  min,
+  max,
+  step = 1,
+  disabled = false,
+  onChange,
+  hint,
+}) {
+  const safe = clampInt(value, min, max);
+  return (
+    <div className="field field--full slider-field">
+      <div className="slider-field__top">
+        <label htmlFor={id}>{label}</label>
+        <input
+          type="number"
+          className="input slider-field__number"
+          min={min}
+          max={max}
+          step={step}
+          value={safe}
+          disabled={disabled}
+          onChange={(e) => onChange(clampInt(e.target.value, min, max))}
+          aria-label={`${label} value`}
+        />
+      </div>
+      <input
+        id={id}
+        type="range"
+        className="range-input"
+        min={min}
+        max={max}
+        step={step}
+        value={safe}
+        disabled={disabled}
+        onChange={(e) => onChange(clampInt(e.target.value, min, max))}
+      />
+      <div className="slider-field__scale" aria-hidden>
+        <span>{min}</span>
+        <span>{max}</span>
+      </div>
+      {hint ? <p className="field-help">{hint}</p> : null}
+    </div>
+  );
+}
+
+function PositionMiniPad({ title, marker, x, y, onPlace }) {
+  const padRef = useRef(null);
+  const [dragging, setDragging] = useState(false);
+
+  const pointFromEvent = (clientX, clientY) => {
+    const el = padRef.current;
+    if (!el) return null;
+    const r = el.getBoundingClientRect();
+    const x = clampInt(((clientX - r.left) / r.width) * 100, 0, 100);
+    const y = clampInt(((clientY - r.top) / r.height) * 100, 0, 100);
+    return { x, y };
+  };
+
+  const onPadPointerDown = (e) => {
+    e.preventDefault();
+    const p = pointFromEvent(e.clientX, e.clientY);
+    if (!p) return;
+    onPlace(p.x, p.y);
+    e.currentTarget.setPointerCapture?.(e.pointerId);
+    setDragging(true);
+  };
+
+  const onPadPointerMove = (e) => {
+    if (!dragging) return;
+    const p = pointFromEvent(e.clientX, e.clientY);
+    if (!p) return;
+    onPlace(p.x, p.y);
+  };
+
+  const onPadPointerUp = (e) => {
+    e.currentTarget.releasePointerCapture?.(e.pointerId);
+    setDragging(false);
+  };
+
+  return (
+    <div className="field">
+      <div className="position-pad-toolbar">
+        <label>{title}</label>
+        <div className="position-mini-meta">
+          {x}, {y}
+        </div>
+      </div>
+      <div
+        ref={padRef}
+        className="position-pad position-pad--mini"
+        onPointerDown={onPadPointerDown}
+        onPointerMove={onPadPointerMove}
+        onPointerUp={onPadPointerUp}
+        onPointerCancel={onPadPointerUp}
+        role="application"
+        aria-label={`${title} position pad`}
+      >
+        <span
+          className={`position-dot ${marker === 'T' ? 'position-dot--text' : 'position-dot--logo'}`}
+          style={{ left: `${x}%`, top: `${y}%` }}
+          aria-hidden
+        >
+          {marker}
+        </span>
+      </div>
+      <p className="field-help">Click or drag to place.</p>
     </div>
   );
 }
@@ -68,7 +175,7 @@ export function TemplateEditor() {
     const t = editorTemplateId ? getTemplate(editorTemplateId) : null;
     if (t) {
       const copy = JSON.parse(JSON.stringify(t));
-      copy.steps = Math.min(20, Math.max(2, Number(copy.steps) || 12));
+      copy.steps = Math.min(20, Math.max(0, Number(copy.steps) || 6));
       copy.fontSize = normalizeFontSizePx(copy.fontSize);
       const lp = Math.round(Number(copy.logoScale || 0.22) * 100);
       copy.logoScale = Math.min(45, Math.max(8, lp)) / 100;
@@ -131,9 +238,9 @@ export function TemplateEditor() {
       if (!p) return;
       if (mode === 'text') {
         setDraft((d) => ({ ...d, textX: p.x, textY: p.y }));
-      } else if (mode === 'logo' && !draft.logoLocked) {
+      } else if (mode === 'logo') {
         setDraft((d) => ({ ...d, logoX: p.x, logoY: p.y }));
-      } else if (mode === 'resize' && !draft.logoLocked) {
+      } else if (mode === 'resize') {
         const el = stageRef.current;
         if (!el) return;
         const r = el.getBoundingClientRect();
@@ -154,7 +261,7 @@ export function TemplateEditor() {
       window.removeEventListener('pointermove', onMove);
       window.removeEventListener('pointerup', onUp);
     };
-  }, [pctFromEvent, draft.logoLocked, draft.logoX, draft.logoY]);
+  }, [pctFromEvent, draft.logoX, draft.logoY]);
 
   const save = (asNew) => {
     saveTemplate(draft, { asNew });
@@ -224,7 +331,7 @@ export function TemplateEditor() {
                 ) : null}
                 {draft.logoUrl ? (
                   <div
-                    className={`logo-drag${draft.logoLocked ? ' is-locked' : ''}`}
+                    className="logo-drag"
                     style={{
                       left: `${draft.logoX}%`,
                       top: `${draft.logoY}%`,
@@ -234,24 +341,21 @@ export function TemplateEditor() {
                       aspectRatio: '1',
                     }}
                     onPointerDown={(e) => {
-                      if (draft.logoLocked) return;
                       if (e.target.dataset.handle === 'resize') return;
                       e.preventDefault();
                       dragRef.current = 'logo';
                     }}
                   >
                     <img src={draft.logoUrl} alt="" />
-                    {!draft.logoLocked ? (
-                      <div
-                        data-handle="resize"
-                        className="logo-drag__handle"
-                        onPointerDown={(e) => {
-                          e.stopPropagation();
-                          e.preventDefault();
-                          dragRef.current = 'resize';
-                        }}
-                      />
-                    ) : null}
+                    <div
+                      data-handle="resize"
+                      className="logo-drag__handle"
+                      onPointerDown={(e) => {
+                        e.stopPropagation();
+                        e.preventDefault();
+                        dragRef.current = 'resize';
+                      }}
+                    />
                   </div>
                 ) : null}
               </>
@@ -268,213 +372,157 @@ export function TemplateEditor() {
           <p className="template-editor-page__preview-hint">Mock layout preview — connect your inference API for real output.</p>
         </div>
 
-        <div className="editor-scroll panel template-editor-page__form">
-          <div className="editor-form-grid">
-            <div className="section-title editor-form-grid__span">Basic info</div>
-            <div className="field">
-              <label htmlFor="tn">Template name</label>
-              <input
-                id="tn"
-                className="input"
-                value={draft.name}
-                onChange={(e) => setDraft({ ...draft, name: e.target.value })}
+        <div className="editor-scroll panel template-editor-page__form template-editor-form">
+          <section className="editor-card">
+            <h2 className="editor-card__title">Generation Settings</h2>
+            <div className="editor-card__grid">
+              <div className="field">
+                <label htmlFor="tn">Template name</label>
+                <input
+                  id="tn"
+                  className="input"
+                  value={draft.name}
+                  onChange={(e) => setDraft({ ...draft, name: e.target.value })}
+                />
+              </div>
+              <FileUploadRow
+                id="tpl-bg"
+                title="Background image"
+                cta="+ Upload Background"
+                subtitle="Drag & drop or click to upload"
+                onChange={onBgFile}
+              />
+              <div className="field field--full">
+                <label htmlFor="pr">Prompt</label>
+                <textarea
+                  id="pr"
+                  className="textarea textarea--compact"
+                  rows={3}
+                  value={draft.prompt}
+                  onChange={(e) => setDraft({ ...draft, prompt: e.target.value })}
+                />
+              </div>
+              <SliderWithInput
+                id="steps"
+                label="Steps (Generation quality)"
+                value={draft.steps}
+                min={0}
+                max={20}
+                onChange={(value) => setDraft({ ...draft, steps: value })}
+                hint="Higher values can improve quality but take longer."
               />
             </div>
-            <FileUploadRow id="tpl-bg" title="Background image" onChange={onBgFile} />
+          </section>
 
-            <div className="section-title editor-form-grid__span">Prompt settings</div>
-            <div className="field field--full">
-              <label htmlFor="pr">Prompt</label>
-              <textarea
-                id="pr"
-                className="textarea textarea--compact"
-                rows={3}
-                value={draft.prompt}
-                onChange={(e) => setDraft({ ...draft, prompt: e.target.value })}
-              />
-            </div>
-
-            <div className="section-title editor-form-grid__span">Generation</div>
-            <div className="field field--full field--slider-line">
-              <div className="field__slider-line">
-                <label htmlFor="steps">Steps</label>
-                <span className="field__slider-value">{draft.steps}</span>
+          <section className="editor-card">
+            <h2 className="editor-card__title">Text Overlay</h2>
+            <div className="editor-card__grid">
+              <div className="field">
+                <label htmlFor="ov">Text</label>
                 <input
-                  id="steps"
-                  type="range"
-                  className="range-input"
-                  min={2}
-                  max={20}
-                  value={draft.steps}
-                  onChange={(e) =>
-                    setDraft({ ...draft, steps: Number(e.target.value) })
-                  }
+                  id="ov"
+                  className="input"
+                  value={draft.overlayText}
+                  onChange={(e) => setDraft({ ...draft, overlayText: e.target.value })}
+                  placeholder="F1 EXPERIENCE"
                 />
               </div>
-            </div>
-
-            <div className="section-title editor-form-grid__span">Text overlay</div>
-            <div className="field">
-              <label htmlFor="ov">Text</label>
-              <input
-                id="ov"
-                className="input"
-                value={draft.overlayText}
-                onChange={(e) => setDraft({ ...draft, overlayText: e.target.value })}
-                placeholder="F1 EXPERIENCE"
-              />
-            </div>
-            <div className="field">
-              <label htmlFor="font">Font</label>
-              <select
-                id="font"
-                className="select"
-                value={draft.fontFamily}
-                onChange={(e) => setDraft({ ...draft, fontFamily: e.target.value })}
-              >
-                {FONTS.map((f) => (
-                  <option key={f.value} value={f.value}>
-                    {f.label}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div className="field field--full">
-              <div className="field__inline-pair">
-                <div className="field__inline-pair__item">
-                  <label htmlFor="fsz">Font size</label>
-                  <select
-                    id="fsz"
-                    className="select"
-                    value={draft.fontSize}
-                    onChange={(e) =>
-                      setDraft({ ...draft, fontSize: Number(e.target.value) })
-                    }
-                  >
-                    {FONT_SIZE_OPTIONS.map((px) => (
-                      <option key={px} value={px}>
-                        {px}px
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div className="field__inline-pair__item">
-                  <label htmlFor="tc">Text color</label>
-                  <input
-                    id="tc"
-                    type="color"
-                    className="input-color input-color--inline"
-                    value={draft.textColor?.startsWith('#') ? draft.textColor : '#ffffff'}
-                    onChange={(e) => setDraft({ ...draft, textColor: e.target.value })}
-                  />
-                </div>
-              </div>
-            </div>
-            <div className="field field--full">
-              <p className="field__muted-label">Text position (or drag on preview)</p>
-              <div className="field__slider-line">
-                <span className="field__axis" aria-hidden>
-                  X
-                </span>
-                <span className="field__slider-value">{draft.textX}</span>
-                <input
-                  type="range"
-                  className="range-input"
-                  min={0}
-                  max={100}
-                  value={draft.textX}
-                  onChange={(e) => setDraft({ ...draft, textX: Number(e.target.value) })}
-                  aria-label="Text horizontal position"
-                />
-              </div>
-              <div className="field__slider-line field__slider-line--tight">
-                <span className="field__axis" aria-hidden>
-                  Y
-                </span>
-                <span className="field__slider-value">{draft.textY}</span>
-                <input
-                  type="range"
-                  className="range-input"
-                  min={0}
-                  max={100}
-                  value={draft.textY}
-                  onChange={(e) => setDraft({ ...draft, textY: Number(e.target.value) })}
-                  aria-label="Text vertical position"
-                />
-              </div>
-            </div>
-
-            <div className="section-title editor-form-grid__span">Logo</div>
-            <FileUploadRow id="tpl-logo" title="Logo image" onChange={onLogoFile} />
-            <div className="field field--full">
-              <p className="field__muted-label">Logo position (or drag on preview)</p>
-              <div className="field__slider-line">
-                <span className="field__axis" aria-hidden>
-                  X
-                </span>
-                <span className="field__slider-value">{draft.logoX}</span>
-                <input
-                  type="range"
-                  className="range-input"
-                  min={0}
-                  max={100}
-                  value={draft.logoX}
-                  disabled={draft.logoLocked}
-                  onChange={(e) =>
-                    setDraft({ ...draft, logoX: Number(e.target.value) })
-                  }
-                  aria-label="Logo horizontal position"
-                />
-              </div>
-              <div className="field__slider-line field__slider-line--tight">
-                <span className="field__axis" aria-hidden>
-                  Y
-                </span>
-                <span className="field__slider-value">{draft.logoY}</span>
-                <input
-                  type="range"
-                  className="range-input"
-                  min={0}
-                  max={100}
-                  value={draft.logoY}
-                  disabled={draft.logoLocked}
-                  onChange={(e) =>
-                    setDraft({ ...draft, logoY: Number(e.target.value) })
-                  }
-                  aria-label="Logo vertical position"
-                />
-              </div>
-            </div>
-            <div className="field field--full field--slider-line">
-              <div className="field__slider-line">
-                <label htmlFor="logo-scale">Logo scale</label>
+              <div className="field">
+                <label htmlFor="font">Font</label>
                 <select
-                  id="logo-scale"
-                  className="select select--inline"
-                  value={Math.round(draft.logoScale * 100)}
-                  onChange={(e) =>
-                    setDraft({ ...draft, logoScale: Number(e.target.value) / 100 })
-                  }
+                  id="font"
+                  className="select"
+                  value={draft.fontFamily}
+                  onChange={(e) => setDraft({ ...draft, fontFamily: e.target.value })}
                 >
-                  {LOGO_SCALE_OPTIONS.map((p) => (
-                    <option key={p} value={p}>
-                      {p}%
+                  {FONTS.map((f) => (
+                    <option key={f.value} value={f.value}>
+                      {f.label}
                     </option>
                   ))}
                 </select>
               </div>
-            </div>
-            <div className="field field--full">
-              <label className="checkbox-row">
+              <div className="field">
+                <label htmlFor="fsz">Font size</label>
                 <input
-                  type="checkbox"
-                  checked={draft.logoLocked}
-                  onChange={(e) => setDraft({ ...draft, logoLocked: e.target.checked })}
+                  id="fsz"
+                  type="number"
+                  className="input"
+                  min={12}
+                  max={96}
+                  step={2}
+                  value={draft.fontSize}
+                  onChange={(e) =>
+                    setDraft({ ...draft, fontSize: normalizeFontSizePx(e.target.value) })
+                  }
                 />
-                Lock logo position
-              </label>
+              </div>
+              <div className="field">
+                <label htmlFor="tc">Text color</label>
+                <div className="color-field">
+                  <input
+                    id="tc"
+                    type="color"
+                    className="input-color"
+                    value={draft.textColor?.startsWith('#') ? draft.textColor : '#ffffff'}
+                    onChange={(e) => setDraft({ ...draft, textColor: e.target.value })}
+                  />
+                  <input
+                    type="text"
+                    className="input color-field__hex"
+                    value={draft.textColor || '#ffffff'}
+                    onChange={(e) => setDraft({ ...draft, textColor: e.target.value })}
+                    aria-label="Text color hex value"
+                  />
+                </div>
+              </div>
+              <PositionMiniPad
+                title="Text position"
+                marker="T"
+                x={draft.textX}
+                y={draft.textY}
+                onPlace={(x, y) => setDraft((d) => ({ ...d, textX: x, textY: y }))}
+              />
             </div>
-          </div>
+          </section>
+
+          <section className="editor-card">
+            <h2 className="editor-card__title">Logo Settings</h2>
+            <div className="editor-card__grid">
+              <FileUploadRow
+                id="tpl-logo"
+                title="Logo"
+                cta="+ Upload Logo"
+                subtitle="Drag & drop or click to upload"
+                onChange={onLogoFile}
+              />
+              <div className="field">
+                <label htmlFor="logo-scale">Scale</label>
+                <input
+                  id="logo-scale"
+                  type="number"
+                  className="input"
+                  min={8}
+                  max={45}
+                  step={1}
+                  value={Math.round(draft.logoScale * 100)}
+                  onChange={(e) =>
+                    setDraft({
+                      ...draft,
+                      logoScale: clampInt(e.target.value, 8, 45) / 100,
+                    })
+                  }
+                />
+              </div>
+              <PositionMiniPad
+                title="Logo position"
+                marker="L"
+                x={draft.logoX}
+                y={draft.logoY}
+                onPlace={(x, y) => setDraft((d) => ({ ...d, logoX: x, logoY: y }))}
+              />
+            </div>
+          </section>
         </div>
       </div>
     </div>

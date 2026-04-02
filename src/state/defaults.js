@@ -13,7 +13,7 @@ export function createDefaultTemplate(overrides = {}) {
     backgroundUrl: null,
     prompt: '',
     negativePrompt: '',
-    steps: 12,
+    steps: 6,
     cfgScale: 7,
     overlayText: '',
     fontFamily: 'DM Sans, system-ui, sans-serif',
