@@ -24,9 +24,23 @@ export function ProcessingScreen({ subjectDataUrl, template, onDone }) {
   }, [subjectDataUrl, template, onDone]);
 
   return (
-    <div className="processing-screen">
-      <div className="processing-orbit" />
-      <p className="processing-copy">Creating your transformation…</p>
+    <div className="camera-screen camera-screen--processing">
+      <header className="kiosk-stage-header" aria-hidden="true">
+        <span className="kiosk-nav-back kiosk-nav-back--layout-only" tabIndex={-1}>
+          <span className="kiosk-nav-back__chevron" aria-hidden />
+          Back
+        </span>
+      </header>
+      <div className="camera-screen__main">
+        <div className="camera-screen__viewport kiosk-flow-viewport">
+          <div className="kiosk-portrait-frame kiosk-flow-frame kiosk-portrait-frame--processing">
+            <div className="processing-viewfinder">
+              <div className="processing-orbit" aria-hidden />
+              <p className="processing-copy">Creating your transformation…</p>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }

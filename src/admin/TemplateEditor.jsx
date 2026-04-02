@@ -9,14 +9,24 @@ const FONTS = [
   { label: 'Impact', value: 'Impact, Haettenschweiler, sans-serif' },
 ];
 
-const PRESETS = [
-  { id: 'tpl-preview--f1', label: 'F1 / racing' },
-  { id: 'tpl-preview--wizard', label: 'Wizarding / Harry Potter mood' },
-  { id: 'tpl-preview--viking', label: 'Viking / Nordic' },
-  { id: 'tpl-preview--thrones', label: 'Game of Thrones / medieval realm' },
-  { id: 'tpl-preview--cyber', label: 'Cyberpunk (legacy)' },
-  { id: 'tpl-preview--luxury', label: 'Luxury editorial (legacy)' },
-];
+const FONT_SIZE_OPTIONS = (() => {
+  const o = [];
+  for (let px = 12; px <= 96; px += 2) o.push(px);
+  return o;
+})();
+
+/** Logo scale as percent (matches former slider 8–45%) */
+const LOGO_SCALE_OPTIONS = (() => {
+  const o = [];
+  for (let p = 8; p <= 45; p += 1) o.push(p);
+  return o;
+})();
+
+function normalizeFontSizePx(n) {
+  const v = Math.min(96, Math.max(12, Math.round(Number(n) || 42)));
+  const snapped = Math.round((v - 12) / 2) * 2 + 12;
+  return Math.min(96, Math.max(12, snapped));
+}
 
 function FileUploadRow({ id, title, onChange }) {
   return (
@@ -56,8 +66,14 @@ export function TemplateEditor() {
 
   useEffect(() => {
     const t = editorTemplateId ? getTemplate(editorTemplateId) : null;
-    if (t) setDraft(JSON.parse(JSON.stringify(t)));
-    else setDraft(createDefaultTemplate());
+    if (t) {
+      const copy = JSON.parse(JSON.stringify(t));
+      copy.steps = Math.min(20, Math.max(2, Number(copy.steps) || 12));
+      copy.fontSize = normalizeFontSizePx(copy.fontSize);
+      const lp = Math.round(Number(copy.logoScale || 0.22) * 100);
+      copy.logoScale = Math.min(45, Math.max(8, lp)) / 100;
+      setDraft(copy);
+    } else setDraft(createDefaultTemplate());
     setPreviewUrl(null);
   }, [editorTemplateId]);
 
@@ -154,7 +170,7 @@ export function TemplateEditor() {
   return (
     <div className="template-editor-page">
       <div className="admin-page-head template-editor-page__head">
-        <div>
+        <div className="admin-page-head__titles">
           <h1 className="admin-page-title">Template editor</h1>
           <p className="admin-page-sub">Adjust the look; the live app stays visual-only.</p>
         </div>
@@ -264,21 +280,6 @@ export function TemplateEditor() {
                 onChange={(e) => setDraft({ ...draft, name: e.target.value })}
               />
             </div>
-            <div className="field">
-              <label htmlFor="preset">Look preset</label>
-              <select
-                id="preset"
-                className="select"
-                value={draft.previewClass || 'tpl-preview--thrones'}
-                onChange={(e) => setDraft({ ...draft, previewClass: e.target.value })}
-              >
-                {PRESETS.map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {p.label}
-                  </option>
-                ))}
-              </select>
-            </div>
             <FileUploadRow id="tpl-bg" title="Background image" onChange={onBgFile} />
 
             <div className="section-title editor-form-grid__span">Prompt settings</div>
@@ -292,67 +293,25 @@ export function TemplateEditor() {
                 onChange={(e) => setDraft({ ...draft, prompt: e.target.value })}
               />
             </div>
-            <div className="field field--full">
-              <label htmlFor="neg">Negative prompt</label>
-              <textarea
-                id="neg"
-                className="textarea textarea--compact"
-                rows={2}
-                value={draft.negativePrompt}
-                onChange={(e) => setDraft({ ...draft, negativePrompt: e.target.value })}
-              />
-            </div>
 
             <div className="section-title editor-form-grid__span">Generation</div>
-            <div className="field field--full">
-              <label htmlFor="steps">Steps: {draft.steps}</label>
-              <input
-                id="steps"
-                type="range"
-                className="range-input"
-                min={10}
-                max={60}
-                value={draft.steps}
-                onChange={(e) => setDraft({ ...draft, steps: Number(e.target.value) })}
-              />
-            </div>
-            <div className="field">
-              <label htmlFor="cfg">CFG scale</label>
-              <input
-                id="cfg"
-                className="input"
-                type="number"
-                step={0.5}
-                min={1}
-                max={20}
-                value={draft.cfgScale}
-                onChange={(e) => setDraft({ ...draft, cfgScale: Number(e.target.value) })}
-              />
-            </div>
-            <div className="field">
-              <label htmlFor="seedm">Seed mode</label>
-              <select
-                id="seedm"
-                className="select"
-                value={draft.seedMode}
-                onChange={(e) => setDraft({ ...draft, seedMode: e.target.value })}
-              >
-                <option value="random">Random</option>
-                <option value="fixed">Fixed</option>
-              </select>
-            </div>
-            {draft.seedMode === 'fixed' ? (
-              <div className="field">
-                <label htmlFor="seed">Fixed seed</label>
+            <div className="field field--full field--slider-line">
+              <div className="field__slider-line">
+                <label htmlFor="steps">Steps</label>
+                <span className="field__slider-value">{draft.steps}</span>
                 <input
-                  id="seed"
-                  className="input"
-                  type="number"
-                  value={draft.fixedSeed}
-                  onChange={(e) => setDraft({ ...draft, fixedSeed: Number(e.target.value) })}
+                  id="steps"
+                  type="range"
+                  className="range-input"
+                  min={2}
+                  max={20}
+                  value={draft.steps}
+                  onChange={(e) =>
+                    setDraft({ ...draft, steps: Number(e.target.value) })
+                  }
                 />
               </div>
-            ) : null}
+            </div>
 
             <div className="section-title editor-form-grid__span">Text overlay</div>
             <div className="field">
@@ -381,31 +340,43 @@ export function TemplateEditor() {
               </select>
             </div>
             <div className="field field--full">
-              <label htmlFor="fsz">Font size: {draft.fontSize}px</label>
-              <input
-                id="fsz"
-                type="range"
-                className="range-input"
-                min={18}
-                max={96}
-                value={draft.fontSize}
-                onChange={(e) => setDraft({ ...draft, fontSize: Number(e.target.value) })}
-              />
-            </div>
-            <div className="field">
-              <label htmlFor="tc">Text color</label>
-              <input
-                id="tc"
-                type="color"
-                className="input-color"
-                value={draft.textColor?.startsWith('#') ? draft.textColor : '#ffffff'}
-                onChange={(e) => setDraft({ ...draft, textColor: e.target.value })}
-              />
+              <div className="field__inline-pair">
+                <div className="field__inline-pair__item">
+                  <label htmlFor="fsz">Font size</label>
+                  <select
+                    id="fsz"
+                    className="select"
+                    value={draft.fontSize}
+                    onChange={(e) =>
+                      setDraft({ ...draft, fontSize: Number(e.target.value) })
+                    }
+                  >
+                    {FONT_SIZE_OPTIONS.map((px) => (
+                      <option key={px} value={px}>
+                        {px}px
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="field__inline-pair__item">
+                  <label htmlFor="tc">Text color</label>
+                  <input
+                    id="tc"
+                    type="color"
+                    className="input-color input-color--inline"
+                    value={draft.textColor?.startsWith('#') ? draft.textColor : '#ffffff'}
+                    onChange={(e) => setDraft({ ...draft, textColor: e.target.value })}
+                  />
+                </div>
+              </div>
             </div>
             <div className="field field--full">
-              <label>Text position (or drag on preview)</label>
-              <div className="range-row">
-                <span className="range-row__label">X</span>
+              <p className="field__muted-label">Text position (or drag on preview)</p>
+              <div className="field__slider-line">
+                <span className="field__axis" aria-hidden>
+                  X
+                </span>
+                <span className="field__slider-value">{draft.textX}</span>
                 <input
                   type="range"
                   className="range-input"
@@ -413,10 +384,14 @@ export function TemplateEditor() {
                   max={100}
                   value={draft.textX}
                   onChange={(e) => setDraft({ ...draft, textX: Number(e.target.value) })}
+                  aria-label="Text horizontal position"
                 />
               </div>
-              <div className="range-row range-row--tight">
-                <span className="range-row__label">Y</span>
+              <div className="field__slider-line field__slider-line--tight">
+                <span className="field__axis" aria-hidden>
+                  Y
+                </span>
+                <span className="field__slider-value">{draft.textY}</span>
                 <input
                   type="range"
                   className="range-input"
@@ -424,12 +399,71 @@ export function TemplateEditor() {
                   max={100}
                   value={draft.textY}
                   onChange={(e) => setDraft({ ...draft, textY: Number(e.target.value) })}
+                  aria-label="Text vertical position"
                 />
               </div>
             </div>
 
             <div className="section-title editor-form-grid__span">Logo</div>
             <FileUploadRow id="tpl-logo" title="Logo image" onChange={onLogoFile} />
+            <div className="field field--full">
+              <p className="field__muted-label">Logo position (or drag on preview)</p>
+              <div className="field__slider-line">
+                <span className="field__axis" aria-hidden>
+                  X
+                </span>
+                <span className="field__slider-value">{draft.logoX}</span>
+                <input
+                  type="range"
+                  className="range-input"
+                  min={0}
+                  max={100}
+                  value={draft.logoX}
+                  disabled={draft.logoLocked}
+                  onChange={(e) =>
+                    setDraft({ ...draft, logoX: Number(e.target.value) })
+                  }
+                  aria-label="Logo horizontal position"
+                />
+              </div>
+              <div className="field__slider-line field__slider-line--tight">
+                <span className="field__axis" aria-hidden>
+                  Y
+                </span>
+                <span className="field__slider-value">{draft.logoY}</span>
+                <input
+                  type="range"
+                  className="range-input"
+                  min={0}
+                  max={100}
+                  value={draft.logoY}
+                  disabled={draft.logoLocked}
+                  onChange={(e) =>
+                    setDraft({ ...draft, logoY: Number(e.target.value) })
+                  }
+                  aria-label="Logo vertical position"
+                />
+              </div>
+            </div>
+            <div className="field field--full field--slider-line">
+              <div className="field__slider-line">
+                <label htmlFor="logo-scale">Logo scale</label>
+                <select
+                  id="logo-scale"
+                  className="select select--inline"
+                  value={Math.round(draft.logoScale * 100)}
+                  onChange={(e) =>
+                    setDraft({ ...draft, logoScale: Number(e.target.value) / 100 })
+                  }
+                >
+                  {LOGO_SCALE_OPTIONS.map((p) => (
+                    <option key={p} value={p}>
+                      {p}%
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
             <div className="field field--full">
               <label className="checkbox-row">
                 <input
@@ -439,40 +473,6 @@ export function TemplateEditor() {
                 />
                 Lock logo position
               </label>
-            </div>
-            <div className="field field--full">
-              <label>Logo scale: {Math.round(draft.logoScale * 100)}%</label>
-              <input
-                type="range"
-                className="range-input"
-                min={8}
-                max={45}
-                value={Math.round(draft.logoScale * 100)}
-                onChange={(e) =>
-                  setDraft({ ...draft, logoScale: Number(e.target.value) / 100 })
-                }
-              />
-            </div>
-
-            <div className="section-title editor-form-grid__span">Modular notes</div>
-            <div className="field field--full">
-              <label htmlFor="lora">LoRA references</label>
-              <input
-                id="lora"
-                className="input"
-                value={draft.loraRefs || ''}
-                onChange={(e) => setDraft({ ...draft, loraRefs: e.target.value })}
-              />
-            </div>
-            <div className="field field--full">
-              <label htmlFor="th">Theme notes</label>
-              <textarea
-                id="th"
-                className="textarea textarea--compact"
-                rows={2}
-                value={draft.themeNotes || ''}
-                onChange={(e) => setDraft({ ...draft, themeNotes: e.target.value })}
-              />
             </div>
           </div>
         </div>

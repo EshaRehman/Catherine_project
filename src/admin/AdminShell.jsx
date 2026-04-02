@@ -19,19 +19,15 @@ export function AdminShell({ children }) {
         <div className="admin-brand">
           <div className="admin-brand-mark" aria-hidden>
             <svg className="admin-brand-mark__svg" viewBox="0 0 40 40" fill="none" aria-hidden>
-              <circle cx="26" cy="12" r="5.5" stroke="rgba(255,255,255,0.92)" strokeWidth="1.35" />
+              {/* Cleaner, centered “C” style cue mark */}
               <path
-                d="M6 30.5 L22.5 14"
-                stroke="rgba(255,255,255,0.95)"
-                strokeWidth="2"
+                d="M28 13.6c-1.7-1.6-4-2.6-6.7-2.6-5.6 0-10.1 4.9-10.1 11s4.5 11 10.1 11c2.7 0 5-.9 6.7-2.6"
+                stroke="rgba(255,255,255,0.92)"
+                strokeWidth="2.6"
                 strokeLinecap="round"
+                strokeLinejoin="round"
               />
-              <path
-                d="M5 31.5 L4 33"
-                stroke="rgba(255,255,255,0.45)"
-                strokeWidth="1.5"
-                strokeLinecap="round"
-              />
+              <circle cx="13.2" cy="23.1" r="1.9" fill="rgba(255,255,255,0.55)" />
             </svg>
           </div>
           <span className="admin-brand-text">{settings.brandName || 'Catherine'}</span>

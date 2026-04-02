@@ -13,10 +13,8 @@ export function createDefaultTemplate(overrides = {}) {
     backgroundUrl: null,
     prompt: '',
     negativePrompt: '',
-    steps: 28,
+    steps: 12,
     cfgScale: 7,
-    seedMode: 'random',
-    fixedSeed: 42,
     overlayText: '',
     fontFamily: 'DM Sans, system-ui, sans-serif',
     fontSize: 42,
@@ -28,8 +26,6 @@ export function createDefaultTemplate(overrides = {}) {
     logoY: 10,
     logoScale: 0.22,
     logoLocked: false,
-    loraRefs: '',
-    themeNotes: '',
     ...overrides,
   };
 }

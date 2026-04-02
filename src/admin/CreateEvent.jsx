@@ -41,25 +41,30 @@ export function CreateEvent() {
 
   const [name, setName] = useState('');
   const [templateIds, setTemplateIds] = useState([]);
-  const [photoCount, setPhotoCount] = useState(1);
   const [countdownSec, setCountdownSec] = useState(3);
   const [status, setStatus] = useState('active');
+  const [formError, setFormError] = useState('');
+
+  /* Reset when switching create ↔ edit only (not when `events` updates during create) */
+  useEffect(() => {
+    if (eventFormId) return;
+    setName('');
+    setTemplateIds([]);
+    setCountdownSec(3);
+    setStatus('active');
+    setFormError('');
+  }, [eventFormId]);
 
   useEffect(() => {
-    if (existing) {
-      setName(existing.name || '');
-      setTemplateIds(existing.templateIds?.length ? [...existing.templateIds] : []);
-      setPhotoCount(existing.photoCount ?? 1);
-      setCountdownSec(existing.countdownSec ?? 3);
-      setStatus(existing.status || 'active');
-    } else {
-      setName('');
-      setTemplateIds([]);
-      setPhotoCount(1);
-      setCountdownSec(3);
-      setStatus('active');
-    }
-  }, [existing]);
+    if (!eventFormId) return;
+    const ex = events.find((e) => e.id === eventFormId);
+    if (!ex) return;
+    setName(ex.name || '');
+    setTemplateIds(ex.templateIds?.length ? [...ex.templateIds] : []);
+    setCountdownSec(ex.countdownSec ?? 3);
+    setStatus(ex.status || 'active');
+    setFormError('');
+  }, [eventFormId, events]);
 
   const toggleTpl = (id) => {
     setTemplateIds((prev) =>
@@ -69,12 +74,19 @@ export function CreateEvent() {
 
   const submit = (e) => {
     e.preventDefault();
-    if (!name.trim() || templateIds.length === 0) return;
+    if (!name.trim()) {
+      setFormError('Enter an event name.');
+      return;
+    }
+    if (templateIds.length === 0) {
+      setFormError('Select at least one template for this event.');
+      return;
+    }
+    setFormError('');
     const ev = {
       id: existing?.id || uid(),
       name: name.trim(),
       templateIds: [...templateIds],
-      photoCount: Math.max(1, Number(photoCount) || 1),
       countdownSec: Math.max(1, Math.min(10, Number(countdownSec) || 3)),
       status,
       createdAt: existing?.createdAt || new Date().toISOString(),
@@ -86,7 +98,7 @@ export function CreateEvent() {
   return (
     <>
       <div className="admin-page-head">
-        <div>
+        <div className="admin-page-head__titles">
           <h1 className="admin-page-title">{existing ? 'Edit event' : 'Create event'}</h1>
           <p className="admin-page-sub">Name the experience and choose which looks guests can pick.</p>
         </div>
@@ -115,6 +127,11 @@ export function CreateEvent() {
         <p className="admin-page-sub" style={{ marginTop: -6 }}>
           Tap cards to include them in the live gallery. Guests only see names and artwork.
         </p>
+        {formError ? (
+          <p className="field-error" role="alert">
+            {formError}
+          </p>
+        ) : null}
         <div
           className="kiosk-templates-grid kiosk-templates-grid--themes kiosk-templates-grid--inline"
           style={{ marginBottom: 24, marginTop: 16 }}
@@ -130,18 +147,6 @@ export function CreateEvent() {
         </div>
 
         <div className="section-title">Optional settings</div>
-        <div className="field">
-          <label htmlFor="ev-photos">Number of photos</label>
-          <input
-            id="ev-photos"
-            className="input"
-            type="number"
-            min={1}
-            max={20}
-            value={photoCount}
-            onChange={(e) => setPhotoCount(e.target.value)}
-          />
-        </div>
         <div className="field">
           <label htmlFor="ev-count">Countdown (seconds)</label>
           <input
@@ -168,7 +173,7 @@ export function CreateEvent() {
         </div>
 
         <div style={{ display: 'flex', gap: 12, marginTop: 28 }}>
-          <button type="submit" className="btn btn-primary" disabled={!name.trim() || !templateIds.length}>
+          <button type="submit" className="btn btn-primary">
             Save event
           </button>
           <button type="button" className="btn btn-ghost" onClick={() => setAdminRoute('events')}>

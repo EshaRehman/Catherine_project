@@ -140,6 +140,9 @@ export function AppProvider({ children }) {
 
   const deleteEvent = useCallback((id) => {
     setEvents((prev) => prev.filter((e) => e.id !== id));
+    setSettings((prev) =>
+      prev.activeEventId === id ? { ...prev, activeEventId: null } : prev,
+    );
   }, []);
 
   const duplicateEvent = useCallback((id) => {

@@ -101,7 +101,7 @@ export function KioskApp() {
 
       {phase === 'result' && resultDataUrl && selectedTemplate && (
         <ResultScreen
-          imageUrl={resultDataUrl}
+          template={selectedTemplate}
           onQR={() => setPhase('qr')}
           onRegenerate={() => {
             setResultDataUrl(null);

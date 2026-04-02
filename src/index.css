@@ -108,7 +108,7 @@ select {
   display: flex;
   flex-direction: column;
   gap: 22px;
-  padding: 28px 20px 32px;
+  padding: 28px 28px 32px;
   border-right: 1px solid rgba(61, 43, 86, 0.08);
   background: rgba(255, 255, 255, 0.88);
   backdrop-filter: blur(14px);
@@ -119,6 +119,10 @@ select {
   flex-direction: column;
   align-items: flex-start;
   gap: 14px;
+  width: 100%;
+  box-sizing: border-box;
+  /* Match nav label inset so logo + title line up with “Events” / “Templates” text */
+  padding-left: 18px;
 }
 
 .admin-brand-mark {
@@ -142,6 +146,10 @@ select {
 }
 
 .admin-brand-text {
+  display: block;
+  width: 100%;
+  margin: 0;
+  padding: 0;
   font-weight: 700;
   font-size: 1.35rem;
   letter-spacing: -0.03em;
@@ -161,15 +169,6 @@ select {
   gap: 6px;
   width: 100%;
   margin-top: 36px;
-}
-
-.admin-nav--vertical button {
-  width: 100%;
-  text-align: left;
-  justify-content: flex-start;
-  border-radius: var(--radius-md);
-  padding: 14px 16px;
-  font-size: 0.95rem;
 }
 
 .admin-nav button {
@@ -199,6 +198,16 @@ select {
   box-shadow: 0 0 0 1px rgba(123, 82, 171, 0.2);
 }
 
+/* Vertical nav: comfortable inset inside the rounded hit area / active pill */
+.admin-nav.admin-nav--vertical > button {
+  width: 100%;
+  text-align: left;
+  justify-content: flex-start;
+  border-radius: var(--radius-md);
+  padding: 14px 18px;
+  font-size: 0.95rem;
+}
+
 .admin-body {
   flex: 1;
   min-width: 0;
@@ -215,7 +224,7 @@ select {
   justify-content: flex-end;
   align-items: center;
   gap: 10px;
-  padding: 16px 28px;
+  padding: 16px 40px;
   border-bottom: 1px solid rgba(61, 43, 86, 0.06);
   background: rgba(255, 255, 255, 0.55);
   backdrop-filter: blur(10px);
@@ -226,16 +235,42 @@ select {
   min-height: 0;
   overflow-y: auto;
   overflow-x: hidden;
-  padding: 22px 28px 36px;
+  /* Match sidebar top padding so brand + page headings align */
+  padding: 28px 40px 36px;
   width: 100%;
 }
 
 .admin-page-head {
   display: flex;
-  align-items: flex-end;
+  /* Align top edge so text starts on the same baseline as the sidebar brand */
+  align-items: flex-start;
   justify-content: space-between;
   gap: 20px;
   margin-bottom: 28px;
+}
+
+.admin-page-head__titles {
+  flex: 1;
+  min-width: 0;
+}
+
+.admin-page-head .btn-primary {
+  flex-shrink: 0;
+  align-self: flex-start;
+}
+
+.admin-page-head__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: flex-start;
+  justify-content: flex-end;
+  flex-shrink: 0;
+}
+
+.admin-page-head__actions .btn-primary {
+  flex-shrink: 0;
+  align-self: flex-start;
 }
 
 .admin-page-title {
@@ -243,12 +278,24 @@ select {
   font-size: 1.75rem;
   font-weight: 700;
   letter-spacing: -0.03em;
+  line-height: 1.2;
 }
 
 .admin-page-sub {
   margin: 6px 0 0;
   color: var(--ink-muted);
   font-size: 0.95rem;
+  line-height: 1.45;
+}
+
+.admin-page-sub--live {
+  margin-top: 10px;
+  color: var(--ink);
+}
+
+.admin-page-sub--live-muted {
+  margin-top: 10px;
+  font-size: 0.88rem;
 }
 
 /* --- Buttons --- */
@@ -310,6 +357,11 @@ select {
   gap: 24px;
   justify-content: center;
   width: 100%;
+}
+
+.card-grid--events,
+.card-grid--templates {
+  justify-content: start;
 }
 
 .card {
@@ -410,10 +462,72 @@ select {
   color: var(--ink-muted);
 }
 
+.card-title-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+  min-width: 0;
+}
+
+.card-title-row .card-title {
+  flex: 1;
+  min-width: 0;
+}
+
+.event-live-badge {
+  flex-shrink: 0;
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #fff;
+  background: linear-gradient(135deg, var(--accent) 0%, var(--accent-hover) 100%);
+  padding: 4px 10px;
+  border-radius: var(--radius-pill);
+  box-shadow: 0 4px 12px rgba(123, 82, 171, 0.35);
+}
+
 .card-actions {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
+}
+
+.card-actions--events {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 10px;
+}
+
+.card-actions--events .card-actions__row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.event-on-kiosk-chip {
+  border: none;
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.82rem;
+  font-weight: 700;
+  padding: 8px 14px;
+  border-radius: var(--radius-pill);
+  color: var(--accent);
+  background: rgba(123, 82, 171, 0.14);
+  transition:
+    background 0.2s,
+    transform 0.15s ease;
+}
+
+.event-on-kiosk-chip:hover {
+  background: rgba(123, 82, 171, 0.22);
+}
+
+.event-on-kiosk-chip:active {
+  transform: scale(0.98);
 }
 
 .tpl-preview--f1 {
@@ -453,6 +567,13 @@ select {
   letter-spacing: 0.08em;
   color: var(--gold);
   margin-bottom: 8px;
+}
+
+.field-error {
+  margin: 0 0 12px;
+  font-size: 0.88rem;
+  color: var(--danger);
+  font-weight: 600;
 }
 
 .input,
@@ -499,6 +620,87 @@ select {
   grid-column: 1 / -1;
 }
 
+/* Label + value + range/select on one row (template editor) */
+.field__slider-line {
+  display: flex;
+  align-items: center;
+  gap: 10px 14px;
+  width: 100%;
+  min-width: 0;
+}
+
+.field__slider-line .range-input {
+  flex: 1;
+  min-width: 0;
+}
+
+.field .field__slider-line > label {
+  display: inline-block !important;
+  margin-bottom: 0 !important;
+  flex-shrink: 0;
+}
+
+.field__slider-value {
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+  font-size: 0.82rem;
+  color: var(--ink);
+  min-width: 2rem;
+  text-align: right;
+  flex-shrink: 0;
+}
+
+.field__slider-line--font {
+  flex-wrap: wrap;
+}
+
+/* Font size + text color on one row (template editor) */
+.field__inline-pair {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px 24px;
+  align-items: stretch;
+  width: 100%;
+}
+
+.field__inline-pair__item {
+  flex: 1 1 200px;
+  min-width: 0;
+}
+
+.field__inline-pair__item .select {
+  width: 100%;
+}
+
+.select--inline {
+  width: auto;
+  min-width: 6.25rem;
+  flex-shrink: 0;
+  padding: 10px 12px;
+}
+
+.field__muted-label {
+  margin: 0 0 10px;
+  font-size: 0.78rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--gold);
+}
+
+.field__axis {
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: var(--accent);
+  width: 18px;
+  flex-shrink: 0;
+  text-align: center;
+}
+
+.field__slider-line--tight {
+  margin-top: 10px;
+}
+
 .checkbox-row {
   display: flex;
   align-items: center;
@@ -528,6 +730,12 @@ select {
 .input-color:focus {
   outline: 2px solid rgba(123, 82, 171, 0.35);
   outline-offset: 2px;
+}
+
+.input-color--inline {
+  width: 100%;
+  max-width: 120px;
+  height: 44px;
 }
 
 /* Range inputs — purple */
@@ -571,6 +779,11 @@ select {
   height: 6px;
   border-radius: var(--radius-pill);
   background: rgba(123, 82, 171, 0.2);
+}
+
+.range-input:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
 }
 
 .range-row__label {
@@ -689,6 +902,12 @@ select {
   padding: 24px 28px 28px;
 }
 
+.panel--event-form .kiosk-templates-grid--themes {
+  margin-left: 0;
+  margin-right: 0;
+  justify-content: start;
+}
+
 .panel--event-form .kiosk-templates-grid--themes.kiosk-templates-grid--inline {
   max-width: none;
   width: 100%;
@@ -703,6 +922,7 @@ select {
   height: calc(100dvh - 188px);
   max-height: calc(100dvh - 188px);
   min-width: 0;
+  min-height: 0;
 }
 
 .template-editor-page__head {
@@ -723,15 +943,31 @@ select {
   overflow: hidden;
   display: grid;
   grid-template-columns: minmax(220px, 26%) minmax(0, 1fr);
+  /* Single row fills available height so the form column can scroll instead of growing the page */
+  grid-template-rows: minmax(0, 1fr);
   gap: 20px;
   align-items: stretch;
+}
+
+.template-editor-page__split > * {
+  min-height: 0;
 }
 
 .template-editor-page__form {
   max-height: 100%;
   min-height: 0;
   overflow-y: auto;
-  padding: 16px 18px 20px;
+  padding: 16px 18px 28px;
+}
+
+/* Scrollable form: override generic .editor-scroll max-height so the grid cell height wins */
+.template-editor-page__split > .editor-scroll.template-editor-page__form {
+  height: 100%;
+  max-height: none;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
 }
 
 .preview-stage-wrap--editor {
@@ -748,19 +984,9 @@ select {
   overflow: hidden;
 }
 
-.preview-stage--compact {
-  width: 100%;
-  max-width: 240px;
-  max-height: min(52vh, 420px);
-  aspect-ratio: 9 / 16;
-  height: auto;
-  border-radius: 20px;
-  flex-shrink: 0;
-}
-
 .template-editor-page__preview-btn {
   width: 100%;
-  max-width: 240px;
+  max-width: min(320px, 92vw);
   padding: 12px 18px;
   font-size: 0.92rem;
 }
@@ -770,7 +996,7 @@ select {
   font-size: 0.78rem;
   color: var(--ink-muted);
   text-align: center;
-  max-width: 240px;
+  max-width: min(320px, 92vw);
   line-height: 1.35;
 }
 
@@ -843,9 +1069,26 @@ select {
   background: #111;
 }
 
+/* Template editor: kiosk-matching 9:16 portrait (must follow .preview-stage so it wins the cascade) */
+.preview-stage.preview-stage--compact {
+  width: 100%;
+  max-width: min(320px, 92vw);
+  aspect-ratio: 9 / 16;
+  height: auto;
+  max-height: min(72dvh, 720px);
+  border-radius: 20px;
+  flex-shrink: 0;
+  overflow: hidden;
+  box-shadow: var(--shadow-soft);
+  position: relative;
+  background: #111;
+}
+
 @media (max-width: 1100px) {
   .template-editor-page__split {
     grid-template-columns: 1fr;
+    /* Preview row sizes to content; form row fills remaining height and scrolls */
+    grid-template-rows: auto minmax(0, 1fr);
     max-height: none;
   }
 
@@ -857,8 +1100,8 @@ select {
     padding-bottom: 8px;
   }
 
-  .preview-stage--compact {
-    max-height: 380px;
+  .preview-stage.preview-stage--compact {
+    max-height: min(62dvh, 560px);
   }
 }
 
@@ -1201,6 +1444,13 @@ select {
   box-shadow: 0 8px 28px rgba(123, 82, 171, 0.12);
 }
 
+/* Invisible duplicate for processing: keeps viewfinder size aligned with camera */
+.kiosk-nav-back--layout-only {
+  visibility: hidden;
+  pointer-events: none;
+  user-select: none;
+}
+
 .kiosk-nav-back:focus-visible {
   outline: none;
   box-shadow:
@@ -1250,6 +1500,40 @@ select {
   align-items: center;
   padding: 0 0 24px;
   min-height: 0;
+}
+
+.kiosk-templates__center-inner {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: clamp(32px, 5.5vh, 52px);
+  width: 100%;
+}
+
+.kiosk-templates__hint {
+  margin: 0;
+  padding: 0 20px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  text-align: center;
+  font-size: clamp(1rem, 2.2vw, 1.12rem);
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  line-height: 1.35;
+  color: var(--ink);
+  max-width: 22rem;
+  opacity: 0.92;
+}
+
+.kiosk-templates__hint-line {
+  display: block;
+  width: 40px;
+  height: 2px;
+  border-radius: 2px;
+  background: linear-gradient(90deg, transparent, var(--gold), transparent);
+  opacity: 0.9;
 }
 
 .kiosk-templates-grid {
@@ -1428,24 +1712,24 @@ select {
   max-width: 360px;
 }
 
-/* Groups preview + capture so the button sits higher (not pinned to screen bottom) */
+/* Preview fills space; shutter pinned bottom-center (iPhone-style) */
 .camera-screen__main {
   flex: 1;
   min-height: 0;
   display: flex;
   flex-direction: column;
-  justify-content: center;
-  align-items: center;
-  gap: 18px;
-  padding-bottom: max(12px, env(safe-area-inset-bottom));
+  justify-content: flex-start;
+  align-items: stretch;
 }
 
-.camera-screen__viewport {
-  flex: 0 0 auto;
+/* Capture / processing / result: frame top-aligned (same slot); room below for actions */
+.kiosk-flow-viewport {
+  flex: 1;
+  min-height: 0;
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: center;
-  padding: 4px 20px 0;
+  padding: 4px 20px 10px;
 }
 
 /* Shared 9:16 portrait stage — camera + result use identical outer frame */
@@ -1464,6 +1748,11 @@ select {
     linear-gradient(165deg, #1e1830 0%, #0f0c18 45%, #1a1428 100%);
 }
 
+/* Camera → processing → result: one consistent viewfinder size */
+.kiosk-portrait-frame.kiosk-flow-frame {
+  max-height: min(82dvh, calc(100dvh - 130px));
+}
+
 .kiosk-portrait-frame__video,
 .kiosk-portrait-frame__media {
   position: absolute;
@@ -1474,35 +1763,171 @@ select {
   object-fit: cover;
 }
 
+/* Result: full-bleed template art (not the composite, which can contain webcam placeholder) */
 .kiosk-portrait-frame--result .kiosk-portrait-frame__media {
-  object-fit: contain;
-  background: radial-gradient(ellipse 80% 70% at 50% 40%, #2a2438 0%, #0e0a14 100%);
+  object-fit: cover;
+  background: #0a0a0c;
+}
+
+.kiosk-portrait-frame__plate {
+  min-height: 100%;
+}
+
+.kiosk-portrait-frame__result-shade {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  border-radius: inherit;
+  background:
+    linear-gradient(165deg, rgba(6, 4, 14, 0.1) 0%, transparent 45%),
+    linear-gradient(0deg, rgba(4, 2, 12, 0.35) 0%, transparent 55%),
+    radial-gradient(ellipse 95% 85% at 50% 48%, transparent 42%, rgba(2, 1, 8, 0.25) 100%);
+}
+
+/* Camera: solid black “viewfinder”, shutter inside frame */
+.camera-screen .kiosk-portrait-frame {
+  background: #000;
+  box-shadow:
+    0 24px 70px rgba(0, 0, 0, 0.35),
+    0 0 0 1px rgba(255, 255, 255, 0.1);
+}
+
+/* Processing: same black frame as camera; centered status (no grey placeholder) */
+.kiosk-portrait-frame--processing {
+  background: #000;
+  box-shadow:
+    0 24px 70px rgba(0, 0, 0, 0.35),
+    0 0 0 1px rgba(255, 255, 255, 0.1);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.processing-viewfinder {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 22px;
+  padding: 28px 22px;
+  max-width: 90%;
+  text-align: center;
+}
+
+.kiosk-portrait-frame--processing .processing-orbit {
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  border: 3px solid rgba(255, 255, 255, 0.22);
+  border-top-color: var(--accent);
+  box-shadow: 0 0 28px rgba(123, 82, 171, 0.45);
+  animation: spin 1s linear infinite;
+}
+
+.kiosk-portrait-frame--processing .processing-copy {
+  margin: 0;
+  font-size: clamp(1rem, 2.8vw, 1.15rem);
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  line-height: 1.45;
+  color: rgba(255, 255, 255, 0.92);
+  text-shadow: 0 2px 20px rgba(0, 0, 0, 0.5);
+  max-width: 18ch;
 }
 
 .camera-wrap {
   position: absolute;
   inset: 0;
+  background: #000;
+  isolation: isolate;
+  overflow: hidden;
 }
 
-.kiosk-portrait-frame .camera-wrap__video {
+/* Solid black under video — Chromium/Electron can still paint a grey layer when video has no frame yet */
+.camera-wrap__sink {
   position: absolute;
   inset: 0;
+  z-index: 0;
+  background: #000;
+  pointer-events: none;
+}
+
+/*
+ * Source only — keep OUT of the visible viewfinder stack. Chromium/Electron often composites
+ * a grey “no frame” layer + camera glyph on <video> even at opacity:0 while it sits in-frame.
+ */
+.kiosk-portrait-frame .camera-wrap__video {
+  position: absolute;
+  left: -9999px;
+  top: 0;
+  width: 4px;
+  height: 4px;
+  opacity: 0;
+  pointer-events: none;
+  z-index: 0;
+  overflow: hidden;
+}
+
+/* Visible preview: black until drawImage fills frames */
+.kiosk-portrait-frame .camera-wrap__preview {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
   width: 100%;
   height: 100%;
-  object-fit: cover;
   display: block;
+  background: #000;
+  object-fit: cover;
+  /* Opaque bitmap only — no transparency holes for stray layers to show through */
+  image-rendering: auto;
+}
+
+.kiosk-portrait-frame .camera-wrap__video::-webkit-media-controls {
+  display: none !important;
+}
+
+.kiosk-portrait-frame .camera-wrap__video::-webkit-media-controls-start-playback-button {
+  display: none !important;
 }
 
 /* Rounded-rect framing guide (no oval / no heavy vignette) */
 .camera-frame-hint {
   position: absolute;
   inset: 5.5% 6%;
+  z-index: 3;
   border-radius: clamp(14px, 2.5vw, 24px);
   border: 2px solid rgba(255, 255, 255, 0.52);
   box-shadow:
     0 0 0 1px rgba(0, 0, 0, 0.2) inset,
     0 0 24px rgba(0, 0, 0, 0.15) inset;
   pointer-events: none;
+}
+
+/* Shutter + status overlaid at bottom of viewfinder (iPhone-style) */
+.camera-screen .camera-wrap__controls {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 4;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px calc(14px + env(safe-area-inset-bottom, 0px));
+  background: linear-gradient(
+    to top,
+    rgba(0, 0, 0, 0.72) 0%,
+    rgba(0, 0, 0, 0.2) 55%,
+    transparent 100%
+  );
+  pointer-events: none;
+}
+
+.camera-screen .camera-wrap__controls .camera-shutter {
+  pointer-events: auto;
 }
 
 .camera-frame-hint::before {
@@ -1517,6 +1942,7 @@ select {
 .countdown-overlay {
   position: absolute;
   inset: 0;
+  z-index: 5;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1547,68 +1973,107 @@ select {
   }
 }
 
-.camera-screen__footer {
-  flex-shrink: 0;
-  padding: 0 24px;
-  display: flex;
-  justify-content: center;
-}
-
-.camera-screen__capture {
-  padding: 18px 48px;
-  font-size: 1.08rem;
-  min-width: min(280px, 88vw);
-}
-
-.processing-screen {
-  min-height: 100vh;
-  min-height: 100dvh;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 28px;
-  padding: 32px;
-  background: var(--bg);
-  background-image: var(--pattern);
+/* iPhone-style shutter: light ring + purple disc (Catherine theme) */
+.camera-shutter {
   position: relative;
+  width: 80px;
+  height: 80px;
+  flex-shrink: 0;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  background: transparent;
+  border-radius: 50%;
+  transition: transform 0.18s ease;
 }
 
-.processing-screen::before {
-  content: '';
+.camera-shutter:focus-visible {
+  outline: none;
+}
+
+.camera-shutter:focus-visible .camera-shutter__ring {
+  box-shadow:
+    0 8px 36px rgba(123, 82, 171, 0.35),
+    0 0 0 3px rgba(123, 82, 171, 0.45);
+}
+
+.camera-shutter:active:not(:disabled) {
+  transform: scale(0.94);
+}
+
+.camera-shutter:disabled {
+  cursor: not-allowed;
+  opacity: 0.48;
+}
+
+.camera-shutter__ring {
   position: absolute;
   inset: 0;
-  pointer-events: none;
-  background: radial-gradient(ellipse 65% 50% at 50% 35%, rgba(123, 82, 171, 0.1) 0%, transparent 60%);
-}
-
-.processing-screen > * {
-  position: relative;
-  z-index: 1;
-}
-
-.processing-orbit {
-  width: 88px;
-  height: 88px;
   border-radius: 50%;
-  border: 3px solid rgba(123, 82, 171, 0.18);
-  border-top-color: var(--accent);
-  box-shadow: 0 8px 32px rgba(123, 82, 171, 0.15);
-  animation: spin 1s linear infinite;
+  background: #fff;
+  box-shadow:
+    0 10px 40px rgba(61, 43, 86, 0.2),
+    0 0 0 1px rgba(61, 43, 86, 0.1),
+    inset 0 1px 0 rgba(255, 255, 255, 0.9);
+}
+
+.camera-shutter__disc {
+  position: absolute;
+  inset: 7px;
+  border-radius: 50%;
+  background: linear-gradient(165deg, #b89fd8 0%, var(--accent) 42%, #4f3680 100%);
+  box-shadow:
+    inset 0 3px 14px rgba(255, 255, 255, 0.35),
+    inset 0 -4px 12px rgba(40, 20, 60, 0.35);
+}
+
+.camera-shutter:hover:not(:disabled) .camera-shutter__disc {
+  filter: brightness(1.06);
+}
+
+.camera-shutter--counting .camera-shutter__ring {
+  animation: shutter-pulse 1s ease-in-out infinite;
+}
+
+@keyframes shutter-pulse {
+  0%,
+  100% {
+    box-shadow:
+      0 10px 40px rgba(61, 43, 86, 0.2),
+      0 0 0 1px rgba(123, 82, 171, 0.35);
+  }
+  50% {
+    box-shadow:
+      0 10px 48px rgba(123, 82, 171, 0.45),
+      0 0 0 3px rgba(123, 82, 171, 0.25);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .camera-shutter--counting .camera-shutter__ring {
+    animation: none;
+  }
+}
+
+.camera-shutter__status {
+  margin: 0;
+  min-height: 1.35em;
+  font-size: 0.82rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-align: center;
+}
+
+.camera-screen .camera-wrap__controls .camera-shutter__status {
+  color: rgba(255, 255, 255, 0.88);
+  text-shadow: 0 1px 10px rgba(0, 0, 0, 0.85);
+  pointer-events: none;
 }
 
 @keyframes spin {
   to {
     transform: rotate(360deg);
   }
-}
-
-.processing-copy {
-  font-size: 1.25rem;
-  font-weight: 600;
-  color: var(--ink);
-  text-align: center;
-  max-width: 320px;
 }
 
 .result-screen {
@@ -1618,12 +2083,15 @@ select {
   height: 100dvh;
   display: flex;
   flex-direction: column;
-  justify-content: center;
-  align-items: center;
+  justify-content: flex-start;
+  align-items: stretch;
   background: var(--bg);
   background-image: var(--pattern);
   box-sizing: border-box;
-  padding: max(8px, env(safe-area-inset-top)) 16px max(16px, env(safe-area-inset-bottom));
+  padding-top: env(safe-area-inset-top);
+  padding-bottom: max(12px, env(safe-area-inset-bottom));
+  padding-left: 16px;
+  padding-right: 16px;
   position: relative;
 }
 
@@ -1643,21 +2111,23 @@ select {
   z-index: 1;
 }
 
-.result-screen__column {
+.result-screen__main {
+  flex: 1;
+  min-height: 0;
   display: flex;
   flex-direction: column;
-  align-items: center;
-  gap: 18px;
+  align-items: stretch;
   width: 100%;
   max-width: 520px;
+  margin-inline: auto;
+  /* Tight gap between portrait and actions (viewport no longer flex-grows) */
+  gap: 10px;
 }
 
-.result-screen__viewport {
+/* Result: don’t use flex:1 on the viewport — that ate all vertical space and pinned the bar to the bottom */
+.result-screen__viewport.kiosk-flow-viewport {
   flex: 0 0 auto;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 0;
+  min-height: 0;
 }
 
 .kiosk-portrait-frame--result {
@@ -1806,6 +2276,19 @@ select {
   gap: 10px;
   justify-content: flex-end;
   margin-top: 16px;
+}
+
+.modal--confirm {
+  border: 1px solid rgba(61, 43, 86, 0.1);
+  box-shadow:
+    var(--shadow-soft),
+    0 0 0 1px rgba(61, 43, 86, 0.06);
+}
+
+.modal--confirm h2 {
+  color: var(--ink);
+  font-weight: 700;
+  letter-spacing: -0.02em;
 }
 
 .splash {
