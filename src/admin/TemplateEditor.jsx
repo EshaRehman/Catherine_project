@@ -10,9 +10,12 @@ const FONTS = [
 ];
 
 const PRESETS = [
-  { id: 'tpl-preview--f1', label: 'F1 / neon red' },
-  { id: 'tpl-preview--cyber', label: 'Cyberpunk' },
-  { id: 'tpl-preview--luxury', label: 'Luxury editorial' },
+  { id: 'tpl-preview--f1', label: 'F1 / racing' },
+  { id: 'tpl-preview--wizard', label: 'Wizarding / Harry Potter mood' },
+  { id: 'tpl-preview--viking', label: 'Viking / Nordic' },
+  { id: 'tpl-preview--thrones', label: 'Game of Thrones / medieval realm' },
+  { id: 'tpl-preview--cyber', label: 'Cyberpunk (legacy)' },
+  { id: 'tpl-preview--luxury', label: 'Luxury editorial (legacy)' },
 ];
 
 function FileUploadRow({ id, title, onChange }) {
@@ -146,7 +149,7 @@ export function TemplateEditor() {
     ? { backgroundImage: `url(${draft.backgroundUrl})` }
     : {};
 
-  const min = draft.previewClass || 'tpl-preview--luxury';
+  const min = draft.previewClass || 'tpl-preview--thrones';
 
   return (
     <div className="template-editor-page">
@@ -266,7 +269,7 @@ export function TemplateEditor() {
               <select
                 id="preset"
                 className="select"
-                value={draft.previewClass || 'tpl-preview--luxury'}
+                value={draft.previewClass || 'tpl-preview--thrones'}
                 onChange={(e) => setDraft({ ...draft, previewClass: e.target.value })}
               >
                 {PRESETS.map((p) => (

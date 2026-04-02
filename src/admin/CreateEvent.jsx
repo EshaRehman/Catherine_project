@@ -1,5 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useApp } from '../state/AppContext.jsx';
+import { TemplateThemePreview } from '../components/TemplateThemePreview.jsx';
+import { getTemplateTagline } from '../constants/templateTaglines.js';
 
 const uid = () =>
   `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 9)}`;
@@ -15,18 +17,13 @@ function TemplatePickCard({ template, selected, onToggle }) {
         outlineOffset: 2,
       }}
     >
-      {template.backgroundUrl ? (
-        <img
-          className="kiosk-tpl-visual card-preview-img"
-          src={template.backgroundUrl}
-          alt=""
-        />
-      ) : (
-        <div
-          className={`kiosk-tpl-visual ${template.previewClass || 'tpl-preview--luxury'}`}
-        />
-      )}
-      <div className="kiosk-tpl-name">{template.name}</div>
+      <TemplateThemePreview template={template} variant="kiosk" />
+      <div className="kiosk-tpl-footer">
+        <div className="kiosk-tpl-title">{template.name}</div>
+        {getTemplateTagline(template.previewClass) ? (
+          <div className="kiosk-tpl-tagline">{getTemplateTagline(template.previewClass)}</div>
+        ) : null}
+      </div>
     </button>
   );
 }
@@ -98,7 +95,7 @@ export function CreateEvent() {
         </button>
       </div>
 
-      <form className="panel" onSubmit={submit} style={{ maxWidth: 920 }}>
+      <form className="panel panel--event-form" onSubmit={submit}>
         <div className="section-title" style={{ marginTop: 0 }}>
           Event info
         </div>
@@ -119,7 +116,7 @@ export function CreateEvent() {
           Tap cards to include them in the live gallery. Guests only see names and artwork.
         </p>
         <div
-          className="kiosk-templates-grid"
+          className="kiosk-templates-grid kiosk-templates-grid--themes kiosk-templates-grid--inline"
           style={{ marginBottom: 24, marginTop: 16 }}
         >
           {templates.map((t) => (

@@ -18,7 +18,21 @@ export function AdminShell({ children }) {
       <aside className="admin-sidebar">
         <div className="admin-brand">
           <div className="admin-brand-mark" aria-hidden>
-            <span className="admin-brand-mark__pattern" aria-hidden />
+            <svg className="admin-brand-mark__svg" viewBox="0 0 40 40" fill="none" aria-hidden>
+              <circle cx="26" cy="12" r="5.5" stroke="rgba(255,255,255,0.92)" strokeWidth="1.35" />
+              <path
+                d="M6 30.5 L22.5 14"
+                stroke="rgba(255,255,255,0.95)"
+                strokeWidth="2"
+                strokeLinecap="round"
+              />
+              <path
+                d="M5 31.5 L4 33"
+                stroke="rgba(255,255,255,0.45)"
+                strokeWidth="1.5"
+                strokeLinecap="round"
+              />
+            </svg>
           </div>
           <span className="admin-brand-text">{settings.brandName || 'Catherine'}</span>
         </div>

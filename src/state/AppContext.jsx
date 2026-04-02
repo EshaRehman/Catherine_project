@@ -10,6 +10,8 @@ import {
   createDefaultTemplate,
   DEFAULT_ADMIN_PASSWORD,
   DEFAULT_TEMPLATES,
+  migrateStoredKioskTemplates,
+  PRESET_DEFAULT_BACKGROUND_URLS,
 } from './defaults.js';
 import { loadState, saveState } from './persist.js';
 
@@ -43,13 +45,28 @@ export function AppProvider({ children }) {
     if (s) {
       if (Array.isArray(s.templates) && s.templates.length) {
         setTemplates(
-          s.templates.map((t) => {
-            if (t.previewClass) return t;
-            const n = (t.name || '').toLowerCase();
-            let previewClass = 'tpl-preview--luxury';
-            if (n.includes('f1')) previewClass = 'tpl-preview--f1';
-            else if (n.includes('cyber')) previewClass = 'tpl-preview--cyber';
-            return { ...t, previewClass };
+          migrateStoredKioskTemplates(s.templates).map((t) => {
+            let nt = { ...t };
+            if (!nt.previewClass) {
+              const n = (nt.name || '').toLowerCase();
+              let previewClass = 'tpl-preview--thrones';
+              if (n.includes('f1') || n.includes('racing')) previewClass = 'tpl-preview--f1';
+              else if (n.includes('wizard') || n.includes('potter') || n.includes('magic'))
+                previewClass = 'tpl-preview--wizard';
+              else if (n.includes('viking') || n.includes('nordic'))
+                previewClass = 'tpl-preview--viking';
+              else if (n.includes('throne') || n.includes('realm') || n.includes('medieval'))
+                previewClass = 'tpl-preview--thrones';
+              else if (n.includes('cyber')) previewClass = 'tpl-preview--cyber';
+              else if (n.includes('luxury') || n.includes('editorial'))
+                previewClass = 'tpl-preview--luxury';
+              nt = { ...nt, previewClass };
+            }
+            const presetBg = PRESET_DEFAULT_BACKGROUND_URLS[nt.previewClass];
+            if (!nt.backgroundUrl && presetBg) {
+              nt = { ...nt, backgroundUrl: presetBg };
+            }
+            return nt;
           }),
         );
       }

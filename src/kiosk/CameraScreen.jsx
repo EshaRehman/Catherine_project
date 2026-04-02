@@ -87,35 +87,39 @@ export function CameraScreen({ countdownSec, onCapture, onBack }) {
 
   return (
     <div className="camera-screen">
-      <header className="camera-screen__header">
-        <button type="button" className="camera-screen__back" onClick={onBack}>
-          <span className="camera-screen__back-icon" aria-hidden />
+      <header className="kiosk-stage-header">
+        <button type="button" className="kiosk-nav-back" onClick={onBack}>
+          <span className="kiosk-nav-back__chevron" aria-hidden />
           Back
         </button>
       </header>
 
-      <div className="camera-screen__viewport">
-        <div className="camera-wrap">
-          <video ref={videoRef} playsInline muted className="camera-wrap__video" />
-          <div className="camera-frame-hint" aria-hidden />
-          {count !== null ? (
-            <div className="countdown-overlay">
-              <span className="countdown-overlay__num">{count}</span>
+      <div className="camera-screen__main">
+        <div className="camera-screen__viewport">
+          <div className="kiosk-portrait-frame">
+            <div className="camera-wrap">
+              <video ref={videoRef} playsInline muted className="camera-wrap__video" />
+              <div className="camera-frame-hint" aria-hidden />
+              {count !== null ? (
+                <div className="countdown-overlay">
+                  <span className="countdown-overlay__num">{count}</span>
+                </div>
+              ) : null}
             </div>
-          ) : null}
+          </div>
         </div>
-      </div>
 
-      <footer className="camera-screen__footer">
-        <button
-          type="button"
-          className="btn btn-primary camera-screen__capture"
-          onClick={runCountdown}
-          disabled={count !== null}
-        >
-          {count !== null ? 'Hold still…' : 'Capture'}
-        </button>
-      </footer>
+        <footer className="camera-screen__footer">
+          <button
+            type="button"
+            className="btn btn-primary camera-screen__capture"
+            onClick={runCountdown}
+            disabled={count !== null}
+          >
+            {count !== null ? 'Hold still…' : 'Capture'}
+          </button>
+        </footer>
+      </div>
     </div>
   );
 }

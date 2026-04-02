@@ -1,14 +1,7 @@
 import React from 'react';
 import { useApp } from '../state/AppContext.jsx';
-
-function PreviewThumb({ template }) {
-  if (template.backgroundUrl) {
-    return <img className="card-preview-img" src={template.backgroundUrl} alt="" />;
-  }
-  return (
-    <div className={`card-preview ${template.previewClass || 'tpl-preview--luxury'}`} />
-  );
-}
+import { TemplateThemePreview } from '../components/TemplateThemePreview.jsx';
+import { getTemplateTagline } from '../constants/templateTaglines.js';
 
 export function TemplatesPage() {
   const {
@@ -25,15 +18,12 @@ export function TemplatesPage() {
       <div className="admin-page-head">
         <div>
           <h1 className="admin-page-title">Templates</h1>
-          <p className="admin-page-sub">
-            F1 Racing, Cyberpunk Portrait, and Luxury Editorial are included by default.
-          </p>
         </div>
         <button
           type="button"
           className="btn btn-primary"
           onClick={() => {
-            const t = createDefaultTemplate({ previewClass: 'tpl-preview--luxury' });
+            const t = createDefaultTemplate({ previewClass: 'tpl-preview--thrones' });
             setTemplates((prev) => [...prev, t]);
             openTemplateEditor(t.id, true);
           }}
@@ -46,14 +36,12 @@ export function TemplatesPage() {
         {templates.map((t) => (
           <article key={t.id} className="card">
             <div className="card-preview">
-              <PreviewThumb template={t} />
+              <TemplateThemePreview template={t} variant="admin" />
             </div>
             <div className="card-body">
               <h2 className="card-title">{t.name}</h2>
               <p className="card-meta">
-                {t.previewClass === 'tpl-preview--f1' && 'Motion · neon · race aesthetic'}
-                {t.previewClass === 'tpl-preview--cyber' && 'Neon · futuristic city'}
-                {t.previewClass === 'tpl-preview--luxury' && 'Editorial · soft light · fashion'}
+                {getTemplateTagline(t.previewClass) || 'Custom template'}
               </p>
               <div className="card-actions">
                 <button

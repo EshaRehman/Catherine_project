@@ -1,16 +1,10 @@
 import React from 'react';
 import { useApp } from '../state/AppContext.jsx';
+import { TemplateThemePreview } from '../components/TemplateThemePreview.jsx';
 
 function PreviewThumb({ template }) {
-  if (!template) {
-    return <div className="card-preview tpl-preview--luxury" />;
-  }
-  if (template.backgroundUrl) {
-    return <img className="card-preview-img" src={template.backgroundUrl} alt="" />;
-  }
-  return (
-    <div className={`card-preview ${template.previewClass || 'tpl-preview--luxury'}`} />
-  );
+  const fallback = { backgroundUrl: null, previewClass: 'tpl-preview--thrones' };
+  return <TemplateThemePreview template={template || fallback} variant="admin" />;
 }
 
 export function EventsDashboard() {
