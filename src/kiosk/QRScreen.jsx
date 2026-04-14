@@ -11,15 +11,14 @@ export function QRScreen({ payload, onDone }) {
 
   return (
     <div className="qr-screen">
-      <p style={{ margin: 0, fontWeight: 700, fontSize: '1.2rem', color: 'var(--ink)' }}>
-        Scan to save
+      <p className="qr-screen__lead">
+        <span className="qr-screen__lead-muted">Scan to </span>
+        <span className="text-brand-gradient">save</span>
       </p>
       <div className="qr-box">
         <QRCodeSVG value={payload} size={280} level="M" />
       </div>
-      <p style={{ margin: 0, color: 'var(--ink-muted)', fontSize: '0.9rem' }}>
-        This window will close automatically.
-      </p>
+      <p className="qr-screen__sub">This window will close automatically.</p>
       <button type="button" className="btn btn-ghost" onClick={onDone}>
         Done
       </button>

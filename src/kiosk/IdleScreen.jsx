@@ -1,17 +1,48 @@
 import React from 'react';
+import { useApp } from '../state/AppContext.jsx';
+import idleLogo from '../assets/Robot with camera and vibrant logo.png';
 
 export function IdleScreen({ onStart, disabled }) {
+  const { adminTheme } = useApp();
+  const themeClass = adminTheme === 'light' ? 'kiosk-idle--theme-light' : '';
+
   return (
-    <div className="kiosk-idle kiosk-idle--rich">
-      <div className="kiosk-idle__blobs" aria-hidden>
-        <span className="kiosk-idle__blob kiosk-idle__blob--a" />
-        <span className="kiosk-idle__blob kiosk-idle__blob--b" />
-        <span className="kiosk-idle__blob kiosk-idle__blob--c" />
+    <div className={`kiosk-idle ${themeClass}`.trim()}>
+      <div className="kiosk-idle__backdrop kiosk-idle__backdrop--rich" aria-hidden>
+        <div className="kiosk-idle__ambient" />
+        <div className="kiosk-idle__blobs">
+          <span className="kiosk-idle__blob kiosk-idle__blob--a" />
+          <span className="kiosk-idle__blob kiosk-idle__blob--b" />
+          <span className="kiosk-idle__blob kiosk-idle__blob--c" />
+        </div>
+        <div className="kiosk-idle__grain" />
       </div>
-      <div className="kiosk-idle__grain" aria-hidden />
 
       <div className="kiosk-idle__content">
-        <h1 className="kiosk-idle__title">Your portrait awaits</h1>
+        <div className="kiosk-idle__logo-wrap">
+          <span className="kiosk-idle__logo-glow" aria-hidden />
+          <img
+            className="kiosk-idle__logo"
+            src={idleLogo}
+            alt="AI Photo Activations"
+            width={360}
+            height={160}
+          />
+        </div>
+        <h1 className="kiosk-idle__title">
+          {disabled ? (
+            <>
+              <span className="kiosk-idle__title-plain">Your </span>
+              <span className="text-brand-gradient">portrait</span>
+              <span className="kiosk-idle__title-plain"> awaits</span>
+            </>
+          ) : (
+            <>
+              <span className="kiosk-idle__title-plain">Step in. </span>
+              <span className="text-brand-gradient">Become the artwork.</span>
+            </>
+          )}
+        </h1>
         <p className="kiosk-idle__sub">
           {disabled
             ? 'No looks are available for the live experience yet.'

@@ -2,6 +2,7 @@ import React, { useCallback, useMemo, useState } from 'react';
 import { useApp } from '../state/AppContext.jsx';
 import { AdminUnlockModal } from './AdminUnlockModal.jsx';
 import { CornerLongPress } from './CornerLongPress.jsx';
+import { KioskThemeToggle } from './KioskThemeToggle.jsx';
 import { IdleScreen } from './IdleScreen.jsx';
 import { TemplateSelectScreen } from './TemplateSelectScreen.jsx';
 import { CameraScreen } from './CameraScreen.jsx';
@@ -10,7 +11,7 @@ import { ResultScreen } from './ResultScreen.jsx';
 import { QRScreen } from './QRScreen.jsx';
 
 export function KioskApp() {
-  const { templates, events, settings } = useApp();
+  const { templates, events, settings, adminTheme } = useApp();
   const [phase, setPhase] = useState('idle');
   const [selectedTemplateId, setSelectedTemplateId] = useState(null);
   const [subjectDataUrl, setSubjectDataUrl] = useState(null);
@@ -53,7 +54,8 @@ export function KioskApp() {
   }, []);
 
   return (
-    <div className="shell-kiosk">
+    <div className={`shell-kiosk shell-kiosk--${adminTheme}`}>
+      <KioskThemeToggle />
       <AdminUnlockModal open={adminModal} onClose={() => setAdminModal(false)} />
 
       {phase === 'idle' && (

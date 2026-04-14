@@ -1,3 +1,10 @@
+import {
+  OUTPUT_HEIGHT,
+  OUTPUT_PREVIEW_HEIGHT,
+  OUTPUT_PREVIEW_WIDTH,
+  OUTPUT_WIDTH,
+} from '../constants/outputFormat.js';
+
 function loadImage(src) {
   return new Promise((resolve, reject) => {
     const img = new Image();
@@ -151,8 +158,8 @@ async function fillCanvasBackground(ctx, template, width, height) {
 export async function compositePortrait({
   subjectDataUrl,
   template,
-  width = 1080,
-  height = 1920,
+  width = OUTPUT_WIDTH,
+  height = OUTPUT_HEIGHT,
 }) {
   const canvas = document.createElement('canvas');
   canvas.width = width;
@@ -197,7 +204,11 @@ export async function compositePortrait({
   return canvas.toDataURL('image/jpeg', 0.92);
 }
 
-export async function compositePreviewMock(template, width = 540, height = 960) {
+export async function compositePreviewMock(
+  template,
+  width = OUTPUT_PREVIEW_WIDTH,
+  height = OUTPUT_PREVIEW_HEIGHT,
+) {
   const canvas = document.createElement('canvas');
   canvas.width = width;
   canvas.height = height;
@@ -226,7 +237,7 @@ export async function compositePreviewMock(template, width = 540, height = 960) 
   if (mockOverlay) {
     const tx = (template.textX / 100) * width;
     const ty = (template.textY / 100) * height;
-    const fs = Math.max(14, Math.round((template.fontSize || 40) * (width / 720)));
+    const fs = Math.max(14, Math.round((template.fontSize || 40) * (width / OUTPUT_WIDTH)));
     ctx.font = `700 ${fs}px ${template.fontFamily || 'DM Sans, sans-serif'}`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';

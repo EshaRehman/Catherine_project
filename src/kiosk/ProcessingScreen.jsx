@@ -1,4 +1,5 @@
 import React, { useEffect } from 'react';
+import { OUTPUT_HEIGHT, OUTPUT_WIDTH } from '../constants/outputFormat.js';
 import { compositePortrait } from '../utils/composite.js';
 
 export function ProcessingScreen({ subjectDataUrl, template, onDone }) {
@@ -11,6 +12,8 @@ export function ProcessingScreen({ subjectDataUrl, template, onDone }) {
         const url = await compositePortrait({
           subjectDataUrl,
           template,
+          width: OUTPUT_WIDTH,
+          height: OUTPUT_HEIGHT,
         });
         if (alive) onDone(url);
       } catch {
@@ -36,7 +39,11 @@ export function ProcessingScreen({ subjectDataUrl, template, onDone }) {
           <div className="kiosk-portrait-frame kiosk-flow-frame kiosk-portrait-frame--processing">
             <div className="processing-viewfinder">
               <div className="processing-orbit" aria-hidden />
-              <p className="processing-copy">Creating your transformation…</p>
+              <p className="processing-copy">
+                <span className="processing-copy__plain">Creating your </span>
+                <span className="text-brand-gradient">transformation</span>
+                <span className="processing-copy__plain">…</span>
+              </p>
             </div>
           </div>
         </div>

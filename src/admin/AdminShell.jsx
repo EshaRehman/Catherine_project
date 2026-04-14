@@ -55,7 +55,7 @@ export function AdminShell({ children }) {
             type="button"
             className="btn btn-ghost btn-sm"
             onClick={() => setAdminTheme(adminTheme === 'dark' ? 'light' : 'dark')}
-            title="Toggle theme"
+            title="Appearance: switches admin and live kiosk (light / dark)"
           >
             {adminTheme === 'dark' ? 'Light' : 'Dark'}
           </button>

@@ -1,14 +1,21 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { OUTPUT_HEIGHT, OUTPUT_WIDTH } from '../constants/outputFormat.js';
+import countdownRobotArt from '../assets/Robot with camera and vibrant logo.png';
+import { drawVideoCenterCropToCanvas } from '../utils/drawVideoToOutputFormat.js';
+
+const CAMERA_ORBIT_RX = 24; /* keep in sync with --radius-lg */
 
 export function CameraScreen({ countdownSec, onCapture, onBack }) {
   const videoRef = useRef(null);
   const canvasRef = useRef(null);
   const streamRef = useRef(null);
   const countTimerRef = useRef(null);
+  const orbitFrameRef = useRef(null);
   const previewStartedRef = useRef(false);
   const [error, setError] = useState(null);
   const [count, setCount] = useState(null);
   const [streamReady, setStreamReady] = useState(false);
+  const [orbitDims, setOrbitDims] = useState({ w: 0, h: 0, rx: CAMERA_ORBIT_RX });
 
   useEffect(() => {
     let cancelled = false;
@@ -46,24 +53,13 @@ export function CameraScreen({ countdownSec, onCapture, onBack }) {
   useEffect(() => {
     let cancelled = false;
     let rafId = 0;
-    let ctx = null;
     const tick = () => {
       if (cancelled) return;
       const video = videoRef.current;
       const canvas = canvasRef.current;
       if (video && canvas && video.readyState >= 2 && video.videoWidth > 0) {
-        if (!ctx) ctx = canvas.getContext('2d', { alpha: false });
-        const w = video.videoWidth;
-        const h = video.videoHeight;
-        if (canvas.width !== w || canvas.height !== h) {
-          canvas.width = w;
-          canvas.height = h;
-          ctx = canvas.getContext('2d', { alpha: false });
-        }
-        ctx.fillStyle = '#000';
-        ctx.fillRect(0, 0, w, h);
-        ctx.drawImage(video, 0, 0, w, h);
-        if (!previewStartedRef.current) {
+        const drawn = drawVideoCenterCropToCanvas(video, canvas, OUTPUT_WIDTH, OUTPUT_HEIGHT);
+        if (drawn && !previewStartedRef.current) {
           previewStartedRef.current = true;
           setStreamReady(true);
         }
@@ -84,16 +80,31 @@ export function CameraScreen({ countdownSec, onCapture, onBack }) {
     [],
   );
 
+  useLayoutEffect(() => {
+    const el = orbitFrameRef.current;
+    if (!el || typeof ResizeObserver === 'undefined') return undefined;
+
+    const read = () => {
+      const w = Math.max(1, el.offsetWidth);
+      const h = Math.max(1, el.offsetHeight);
+      const cs = getComputedStyle(el);
+      const rPx = parseFloat(cs.borderTopLeftRadius || `${CAMERA_ORBIT_RX}`);
+      const rxBorder = Number.isFinite(rPx) ? rPx : CAMERA_ORBIT_RX;
+      const rx = Math.min(rxBorder, w / 2 - 0.001, h / 2 - 0.001);
+      setOrbitDims((prev) => (prev.w === w && prev.h === h && prev.rx === rx ? prev : { w, h, rx }));
+    };
+
+    read();
+    const ro = new ResizeObserver(read);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+
   const snap = useCallback(() => {
     const video = videoRef.current;
     if (!video || !video.videoWidth || !streamReady) return;
     const canvas = document.createElement('canvas');
-    canvas.width = video.videoWidth;
-    canvas.height = video.videoHeight;
-    const ctx = canvas.getContext('2d', { alpha: false });
-    ctx.fillStyle = '#000';
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-    ctx.drawImage(video, 0, 0);
+    if (!drawVideoCenterCropToCanvas(video, canvas, OUTPUT_WIDTH, OUTPUT_HEIGHT)) return;
     const dataUrl = canvas.toDataURL('image/jpeg', 0.92);
     streamRef.current?.getTracks().forEach((tr) => tr.stop());
     streamRef.current = null;
@@ -140,7 +151,7 @@ export function CameraScreen({ countdownSec, onCapture, onBack }) {
 
       <div className="camera-screen__main">
         <div className="camera-screen__viewport kiosk-flow-viewport">
-          <div className="kiosk-portrait-frame kiosk-flow-frame">
+          <div ref={orbitFrameRef} className="kiosk-portrait-frame kiosk-flow-frame">
             <div className="camera-wrap">
               <div className="camera-wrap__sink" aria-hidden />
               <video
@@ -153,6 +164,43 @@ export function CameraScreen({ countdownSec, onCapture, onBack }) {
                 aria-hidden
               />
               <canvas ref={canvasRef} className="camera-wrap__preview" aria-hidden />
+              {orbitDims.w > 0 && orbitDims.h > 0 ? (
+                <svg
+                  className="camera-viewfinder-orbit"
+                  viewBox={`0 0 ${orbitDims.w} ${orbitDims.h}`}
+                  preserveAspectRatio="none"
+                  aria-hidden
+                  focusable="false"
+                >
+                  <defs>
+                    <linearGradient
+                      id="camera-orbit-grad"
+                      gradientUnits="userSpaceOnUse"
+                      x1={0}
+                      y1={0}
+                      x2={orbitDims.w}
+                      y2={orbitDims.h}
+                    >
+                      <stop offset="0%" stopColor="#fb923c" />
+                      <stop offset="34%" stopColor="#fde047" />
+                      <stop offset="62%" stopColor="#2dd4bf" />
+                      <stop offset="100%" stopColor="#c084fc" />
+                    </linearGradient>
+                  </defs>
+                  <rect
+                    className="camera-viewfinder-orbit__rect"
+                    x={0}
+                    y={0}
+                    width={orbitDims.w}
+                    height={orbitDims.h}
+                    rx={orbitDims.rx}
+                    ry={orbitDims.rx}
+                    pathLength={100}
+                    fill="none"
+                    stroke="url(#camera-orbit-grad)"
+                  />
+                </svg>
+              ) : null}
               <div className="camera-frame-hint" aria-hidden />
               <div className="camera-wrap__controls">
                 <button
@@ -176,8 +224,21 @@ export function CameraScreen({ countdownSec, onCapture, onBack }) {
                 </p>
               </div>
               {count !== null ? (
-                <div className="countdown-overlay">
-                  <span className="countdown-overlay__num">{count}</span>
+                <div className="countdown-overlay" role="status" aria-live="polite">
+                  <div className="countdown-overlay__halo" aria-hidden />
+                  <div className="countdown-overlay__moment">
+                    <img
+                      src={countdownRobotArt}
+                      alt=""
+                      className="countdown-overlay__robot"
+                      draggable={false}
+                      aria-hidden
+                    />
+                    <span key={count} className="countdown-overlay__num">
+                      {count}
+                    </span>
+                    <p className="countdown-overlay__tagline">Hold still</p>
+                  </div>
                 </div>
               ) : null}
             </div>

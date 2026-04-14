@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useApp } from '../state/AppContext.jsx';
+import { OUTPUT_EDITOR_MOCK_HEIGHT, OUTPUT_EDITOR_MOCK_WIDTH } from '../constants/outputFormat.js';
 import { compositePreviewMock } from '../utils/composite.js';
 
 const FONTS = [
@@ -211,7 +212,11 @@ export function TemplateEditor() {
     setPreviewUrl(null);
     try {
       await new Promise((r) => setTimeout(r, 500));
-      const url = await compositePreviewMock(draft, 360, 640);
+      const url = await compositePreviewMock(
+        draft,
+        OUTPUT_EDITOR_MOCK_WIDTH,
+        OUTPUT_EDITOR_MOCK_HEIGHT,
+      );
       setPreviewUrl(url);
     } finally {
       setGenerating(false);
