@@ -10,12 +10,8 @@ function TemplatePickCard({ template, selected, onToggle }) {
   return (
     <button
       type="button"
-      className="kiosk-tpl-card"
+      className={`kiosk-tpl-card admin-tpl-pick${selected ? ' admin-tpl-pick--selected' : ''}`}
       onClick={onToggle}
-      style={{
-        outline: selected ? '3px solid var(--accent)' : 'none',
-        outlineOffset: 2,
-      }}
     >
       <TemplateThemePreview template={template} variant="kiosk" />
       <div className="kiosk-tpl-footer">
@@ -101,10 +97,8 @@ export function CreateEvent() {
         </button>
       </div>
 
-      <form className="panel panel--event-form" onSubmit={submit}>
-        <div className="section-title" style={{ marginTop: 0 }}>
-          Event info
-        </div>
+      <form className="panel panel--event-form admin-form admin-form--event" onSubmit={submit}>
+        <div className="section-title">Event info</div>
         <div className="field">
           <label htmlFor="ev-name">Event name</label>
           <input
@@ -118,7 +112,7 @@ export function CreateEvent() {
         </div>
 
         <div className="section-title">Select templates</div>
-        <p className="admin-page-sub" style={{ marginTop: -6 }}>
+        <p className="admin-page-sub admin-form__hint admin-form__hint--tight">
           Tap cards to include them in the live gallery. Guests only see names and artwork.
         </p>
         {formError ? (
@@ -126,10 +120,7 @@ export function CreateEvent() {
             {formError}
           </p>
         ) : null}
-        <div
-          className="kiosk-templates-grid kiosk-templates-grid--themes kiosk-templates-grid--inline"
-          style={{ marginBottom: 24, marginTop: 16 }}
-        >
+        <div className="kiosk-templates-grid kiosk-templates-grid--themes kiosk-templates-grid--inline admin-form__template-grid">
           {templates.map((t) => (
             <TemplatePickCard
               key={t.id}
@@ -140,7 +131,7 @@ export function CreateEvent() {
           ))}
         </div>
 
-        <div style={{ display: 'flex', gap: 12, marginTop: 28 }}>
+        <div className="admin-form__actions">
           <button type="submit" className="btn btn-primary">
             Save event
           </button>

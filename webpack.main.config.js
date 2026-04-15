@@ -4,6 +4,10 @@ module.exports = {
    * that runs in the main process.
    */
   entry: './src/main.js',
+  target: 'electron-main',
+  externals: {
+    nodemailer: 'commonjs2 nodemailer',
+  },
   // Put your normal webpack config below here
   module: {
     rules: require('./webpack.rules'),

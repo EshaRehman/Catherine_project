@@ -1,21 +1,21 @@
-import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { OUTPUT_HEIGHT, OUTPUT_WIDTH } from '../constants/outputFormat.js';
 import countdownRobotArt from '../assets/Robot with camera and vibrant logo.png';
 import { drawVideoCenterCropToCanvas } from '../utils/drawVideoToOutputFormat.js';
-
-const CAMERA_ORBIT_RX = 24; /* keep in sync with --radius-lg */
+import { KioskHeaderTrailing } from './KioskHeaderTrailing.jsx';
+import { KioskOrbitChrome } from './KioskOrbitChrome.jsx';
 
 export function CameraScreen({ countdownSec, onCapture, onBack }) {
+  const backRef = useRef(null);
   const videoRef = useRef(null);
   const canvasRef = useRef(null);
   const streamRef = useRef(null);
   const countTimerRef = useRef(null);
-  const orbitFrameRef = useRef(null);
   const previewStartedRef = useRef(false);
   const [error, setError] = useState(null);
   const [count, setCount] = useState(null);
   const [streamReady, setStreamReady] = useState(false);
-  const [orbitDims, setOrbitDims] = useState({ w: 0, h: 0, rx: CAMERA_ORBIT_RX });
+  const [countMomentPulse, setCountMomentPulse] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -80,25 +80,15 @@ export function CameraScreen({ countdownSec, onCapture, onBack }) {
     [],
   );
 
-  useLayoutEffect(() => {
-    const el = orbitFrameRef.current;
-    if (!el || typeof ResizeObserver === 'undefined') return undefined;
-
-    const read = () => {
-      const w = Math.max(1, el.offsetWidth);
-      const h = Math.max(1, el.offsetHeight);
-      const cs = getComputedStyle(el);
-      const rPx = parseFloat(cs.borderTopLeftRadius || `${CAMERA_ORBIT_RX}`);
-      const rxBorder = Number.isFinite(rPx) ? rPx : CAMERA_ORBIT_RX;
-      const rx = Math.min(rxBorder, w / 2 - 0.001, h / 2 - 0.001);
-      setOrbitDims((prev) => (prev.w === w && prev.h === h && prev.rx === rx ? prev : { w, h, rx }));
-    };
-
-    read();
-    const ro = new ResizeObserver(read);
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, []);
+  useEffect(() => {
+    if (count === null) {
+      setCountMomentPulse(false);
+      return undefined;
+    }
+    setCountMomentPulse(true);
+    const t = window.setTimeout(() => setCountMomentPulse(false), 880);
+    return () => window.clearTimeout(t);
+  }, [count]);
 
   const snap = useCallback(() => {
     const video = videoRef.current;
@@ -132,26 +122,40 @@ export function CameraScreen({ countdownSec, onCapture, onBack }) {
   if (error === 'camera') {
     return (
       <div className="camera-screen camera-screen--error">
-        <p className="camera-screen__error-copy">Camera unavailable. Check permissions and try again.</p>
-        <button type="button" className="btn btn-primary" onClick={onBack}>
-          Go back
-        </button>
+        <header className="kiosk-stage-header kiosk-stage-header--end">
+          <KioskHeaderTrailing />
+        </header>
+        <div className="camera-screen--error__body">
+          <p className="camera-screen__error-copy">Camera unavailable. Check permissions and try again.</p>
+          <button type="button" className="btn btn-primary" onClick={onBack}>
+            Go back
+          </button>
+        </div>
       </div>
     );
   }
 
   return (
     <div className="camera-screen">
-      <header className="kiosk-stage-header">
-        <button type="button" className="kiosk-nav-back" onClick={onBack}>
-          <span className="kiosk-nav-back__chevron" aria-hidden />
-          Back
+      <header className="kiosk-stage-header kiosk-stage-header--split">
+        <button
+          ref={backRef}
+          type="button"
+          className="kiosk-nav-back kiosk-chrome-orbit-target"
+          onClick={onBack}
+        >
+          <KioskOrbitChrome anchorRef={backRef} rxFallback={14} />
+          <span className="kiosk-nav-back__face">
+            <span className="kiosk-nav-back__chevron" aria-hidden />
+            Back
+          </span>
         </button>
+        <KioskHeaderTrailing />
       </header>
 
       <div className="camera-screen__main">
         <div className="camera-screen__viewport kiosk-flow-viewport">
-          <div ref={orbitFrameRef} className="kiosk-portrait-frame kiosk-flow-frame">
+          <div className="kiosk-portrait-frame kiosk-flow-frame kiosk-portrait-frame--capture">
             <div className="camera-wrap">
               <div className="camera-wrap__sink" aria-hidden />
               <video
@@ -164,44 +168,14 @@ export function CameraScreen({ countdownSec, onCapture, onBack }) {
                 aria-hidden
               />
               <canvas ref={canvasRef} className="camera-wrap__preview" aria-hidden />
-              {orbitDims.w > 0 && orbitDims.h > 0 ? (
-                <svg
-                  className="camera-viewfinder-orbit"
-                  viewBox={`0 0 ${orbitDims.w} ${orbitDims.h}`}
-                  preserveAspectRatio="none"
-                  aria-hidden
-                  focusable="false"
-                >
-                  <defs>
-                    <linearGradient
-                      id="camera-orbit-grad"
-                      gradientUnits="userSpaceOnUse"
-                      x1={0}
-                      y1={0}
-                      x2={orbitDims.w}
-                      y2={orbitDims.h}
-                    >
-                      <stop offset="0%" stopColor="#fb923c" />
-                      <stop offset="34%" stopColor="#fde047" />
-                      <stop offset="62%" stopColor="#2dd4bf" />
-                      <stop offset="100%" stopColor="#c084fc" />
-                    </linearGradient>
-                  </defs>
-                  <rect
-                    className="camera-viewfinder-orbit__rect"
-                    x={0}
-                    y={0}
-                    width={orbitDims.w}
-                    height={orbitDims.h}
-                    rx={orbitDims.rx}
-                    ry={orbitDims.rx}
-                    pathLength={100}
-                    fill="none"
-                    stroke="url(#camera-orbit-grad)"
-                  />
-                </svg>
-              ) : null}
-              <div className="camera-frame-hint" aria-hidden />
+              <div className="camera-frame-cinematic" aria-hidden="true">
+                <span className="camera-frame-cinematic__letterbox camera-frame-cinematic__letterbox--top" />
+                <span className="camera-frame-cinematic__letterbox camera-frame-cinematic__letterbox--bottom" />
+                <span className="camera-frame-cinematic__glow" />
+                <span className="camera-frame-cinematic__corn camera-frame-cinematic__corn--tr" />
+                <span className="camera-frame-cinematic__corn camera-frame-cinematic__corn--bl" />
+                <span className="camera-frame-cinematic__corn camera-frame-cinematic__corn--br" />
+              </div>
               <div className="camera-wrap__controls">
                 <button
                   type="button"
@@ -225,19 +199,30 @@ export function CameraScreen({ countdownSec, onCapture, onBack }) {
               </div>
               {count !== null ? (
                 <div className="countdown-overlay" role="status" aria-live="polite">
-                  <div className="countdown-overlay__halo" aria-hidden />
+                  <div className="countdown-overlay__veil" aria-hidden />
+                  <div
+                    className={`countdown-overlay__halo${countMomentPulse ? ' countdown-overlay__halo--tick' : ''}`}
+                    aria-hidden
+                  />
                   <div className="countdown-overlay__moment">
-                    <img
-                      src={countdownRobotArt}
-                      alt=""
-                      className="countdown-overlay__robot"
-                      draggable={false}
-                      aria-hidden
-                    />
-                    <span key={count} className="countdown-overlay__num">
-                      {count}
-                    </span>
-                    <p className="countdown-overlay__tagline">Hold still</p>
+                    <div
+                      key={count}
+                      className={`countdown-overlay__beat${count === 1 ? ' countdown-overlay__beat--final' : ''}`}
+                    >
+                      <div className="countdown-overlay__beat-glow" aria-hidden />
+                      <div className="countdown-overlay__robot-wrap">
+                        <img
+                          src={countdownRobotArt}
+                          alt=""
+                          className="countdown-overlay__robot"
+                          draggable={false}
+                          aria-hidden
+                        />
+                      </div>
+                      <div className="countdown-overlay__num-shell">
+                        <span className="countdown-overlay__num">{count}</span>
+                      </div>
+                    </div>
                   </div>
                 </div>
               ) : null}

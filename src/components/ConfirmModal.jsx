@@ -11,6 +11,10 @@ export function ConfirmModal({
   cancelLabel = 'Cancel',
   onConfirm,
   onClose,
+  /** When false, primary button is not red (e.g. OK on an info dialog). */
+  destructive = true,
+  /** Single-button dismiss (calls onConfirm then onClose). */
+  hideCancel = false,
 }) {
   const titleId = useId();
 
@@ -50,10 +54,16 @@ export function ConfirmModal({
         <h2 id={titleId}>{title}</h2>
         <p>{message}</p>
         <div className="modal-actions">
-          <button type="button" className="btn btn-ghost" onClick={onClose}>
-            {cancelLabel}
-          </button>
-          <button type="button" className="btn btn-danger" onClick={handleConfirm}>
+          {!hideCancel ? (
+            <button type="button" className="btn btn-ghost" onClick={onClose}>
+              {cancelLabel}
+            </button>
+          ) : null}
+          <button
+            type="button"
+            className={destructive ? 'btn btn-danger' : 'btn btn-primary'}
+            onClick={handleConfirm}
+          >
             {confirmLabel}
           </button>
         </div>

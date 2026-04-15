@@ -34,7 +34,7 @@ export function AppProvider({ children }) {
   const [settings, setSettings] = useState({
     globalPromptSuffix: '',
     defaultJobQueue: '',
-    brandName: 'Catherine',
+    brandName: '',
     activeEventId: null,
     loraModulePath: '',
     themePackNotes: '',
@@ -74,7 +74,13 @@ export function AppProvider({ children }) {
       if (typeof s.adminPassword === 'string' && s.adminPassword.length)
         setAdminPassword(s.adminPassword);
       if (s.settings && typeof s.settings === 'object')
-        setSettings((prev) => ({ ...prev, ...s.settings }));
+        setSettings((prev) => {
+          const next = { ...prev, ...s.settings };
+          if (next.brandName === 'Catherine') next.brandName = '';
+          if ('smtp' in next) delete next.smtp;
+          if ('jobRetentionDays' in next) delete next.jobRetentionDays;
+          return next;
+        });
     }
     if (s?.adminTheme === 'dark' || s?.adminTheme === 'light')
       setAdminTheme(s.adminTheme);

@@ -377,7 +377,7 @@ export function TemplateEditor() {
           <p className="template-editor-page__preview-hint">Mock layout preview — connect your inference API for real output.</p>
         </div>
 
-        <div className="editor-scroll panel template-editor-page__form template-editor-form">
+        <div className="editor-scroll panel template-editor-page__form template-editor-form admin-form-panel">
           <section className="editor-card">
             <h2 className="editor-card__title">Generation Settings</h2>
             <div className="editor-card__grid">

@@ -1,27 +1,29 @@
-import React, { useEffect } from 'react';
+import React from 'react';
 import { QRCodeSVG } from 'qrcode.react';
+import { KioskHeaderTrailing } from './KioskHeaderTrailing.jsx';
 
-const AUTO_MS = 12000;
+/** Larger QR for distance scanning; level H for readability at size. */
+const QR_SIZE = 336;
 
 export function QRScreen({ payload, onDone }) {
-  useEffect(() => {
-    const t = setTimeout(onDone, AUTO_MS);
-    return () => clearTimeout(t);
-  }, [onDone]);
-
   return (
     <div className="qr-screen">
-      <p className="qr-screen__lead">
-        <span className="qr-screen__lead-muted">Scan to </span>
-        <span className="text-brand-gradient">save</span>
-      </p>
-      <div className="qr-box">
-        <QRCodeSVG value={payload} size={280} level="M" />
+      <header className="kiosk-stage-header kiosk-stage-header--end qr-screen__header">
+        <KioskHeaderTrailing />
+      </header>
+      <div className="qr-screen__main">
+        <div className="qr-screen__stack">
+          <h1 className="qr-screen__title">
+            Scan to <span className="text-brand-gradient">save</span>
+          </h1>
+          <div className="qr-box">
+            <QRCodeSVG value={payload} size={QR_SIZE} level="H" />
+          </div>
+          <button type="button" className="btn btn-primary qr-screen__done" onClick={onDone}>
+            Done
+          </button>
+        </div>
       </div>
-      <p className="qr-screen__sub">This window will close automatically.</p>
-      <button type="button" className="btn btn-ghost" onClick={onDone}>
-        Done
-      </button>
     </div>
   );
 }

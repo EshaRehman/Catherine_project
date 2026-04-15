@@ -1,14 +1,14 @@
 import React, { useCallback, useMemo, useState } from 'react';
 import { useApp } from '../state/AppContext.jsx';
 import { AdminUnlockModal } from './AdminUnlockModal.jsx';
-import { CornerLongPress } from './CornerLongPress.jsx';
-import { KioskThemeToggle } from './KioskThemeToggle.jsx';
+import { KioskAdminEntryProvider } from './KioskAdminEntryContext.jsx';
 import { IdleScreen } from './IdleScreen.jsx';
 import { TemplateSelectScreen } from './TemplateSelectScreen.jsx';
 import { CameraScreen } from './CameraScreen.jsx';
 import { ProcessingScreen } from './ProcessingScreen.jsx';
 import { ResultScreen } from './ResultScreen.jsx';
 import { QRScreen } from './QRScreen.jsx';
+import { saveKioskJobCapture } from '../services/jobExports.js';
 
 export function KioskApp() {
   const { templates, events, settings, adminTheme } = useApp();
@@ -54,9 +54,9 @@ export function KioskApp() {
   }, []);
 
   return (
-    <div className={`shell-kiosk shell-kiosk--${adminTheme}`}>
-      <KioskThemeToggle />
-      <AdminUnlockModal open={adminModal} onClose={() => setAdminModal(false)} />
+    <KioskAdminEntryProvider onOpenAdmin={() => setAdminModal(true)}>
+      <div className={`shell-kiosk shell-kiosk--${adminTheme} shell-kiosk--phase-${phase}`}>
+        <AdminUnlockModal open={adminModal} onClose={() => setAdminModal(false)} />
 
       {phase === 'idle' && (
         <IdleScreen onStart={goStart} disabled={kioskTemplates.length === 0} />
@@ -97,6 +97,17 @@ export function KioskApp() {
           onDone={(url) => {
             setResultDataUrl(url);
             setPhase('result');
+            const evId = settings.activeEventId || '__general__';
+            const evName = activeEvent?.name || 'All templates';
+            saveKioskJobCapture({
+              eventId: evId,
+              eventName: evName,
+              dataUrl: url,
+              templateName: selectedTemplate?.name || 'Portrait',
+              retentionDays: 60,
+            }).catch(() => {
+              /* non-fatal; kiosk continues */
+            });
           }}
         />
       )}
@@ -120,8 +131,7 @@ export function KioskApp() {
         />
       )}
 
-      {/* Must render last so it sits above fullscreen phases and receives pointer events */}
-      <CornerLongPress onActivate={() => setAdminModal(true)} />
-    </div>
+      </div>
+    </KioskAdminEntryProvider>
   );
 }

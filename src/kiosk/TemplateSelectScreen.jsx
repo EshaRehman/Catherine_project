@@ -1,11 +1,15 @@
 import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { TemplateThemePreview } from '../components/TemplateThemePreview.jsx';
+import { usePrefersReducedMotion } from '../hooks/usePrefersReducedMotion.js';
+import { KioskHeaderTrailing } from './KioskHeaderTrailing.jsx';
+import { KioskOrbitChrome } from './KioskOrbitChrome.jsx';
 
 const KIOSK_CARD_RX = 24; /* keep in sync with --radius-lg */
 
-/** Style picker: orbit stroke uses pathLength=100; dash ~91/9 for a long glow with a short traveling gap. */
+/** Style picker: full border stroke; gradient rotates so colors travel smoothly around the card. */
 function KioskStyleCardShell({ template: t, selected, onSelect }) {
   const btnRef = useRef(null);
+  const reducedMotion = usePrefersReducedMotion();
   const [dims, setDims] = useState({ w: 0, h: 0, rx: KIOSK_CARD_RX });
 
   useLayoutEffect(() => {
@@ -68,10 +72,26 @@ function KioskStyleCardShell({ template: t, selected, onSelect }) {
                 x2={w}
                 y2={h}
               >
+                {/* Two passes through the palette along the vector so rotation reads as faster, clearer bands */}
                 <stop offset="0%" stopColor="#fb923c" />
-                <stop offset="34%" stopColor="#fde047" />
-                <stop offset="62%" stopColor="#2dd4bf" />
-                <stop offset="100%" stopColor="#c084fc" />
+                <stop offset="12%" stopColor="#fde047" />
+                <stop offset="25%" stopColor="#2dd4bf" />
+                <stop offset="38%" stopColor="#c084fc" />
+                <stop offset="50%" stopColor="#fb923c" />
+                <stop offset="62%" stopColor="#fde047" />
+                <stop offset="75%" stopColor="#2dd4bf" />
+                <stop offset="88%" stopColor="#c084fc" />
+                <stop offset="100%" stopColor="#fb923c" />
+                {!reducedMotion ? (
+                  <animateTransform
+                    attributeName="gradientTransform"
+                    type="rotate"
+                    from={`0 ${w / 2} ${h / 2}`}
+                    to={`360 ${w / 2} ${h / 2}`}
+                    dur="4s"
+                    repeatCount="indefinite"
+                  />
+                ) : null}
               </linearGradient>
             </defs>
             <rect
@@ -82,7 +102,6 @@ function KioskStyleCardShell({ template: t, selected, onSelect }) {
               height={h}
               rx={rx}
               ry={rx}
-              pathLength={100}
               fill="none"
               stroke={`url(#${gradId})`}
             />
@@ -119,6 +138,7 @@ function KioskStyleCardShell({ template: t, selected, onSelect }) {
 }
 
 export function TemplateSelectScreen({ templates, onPick, onBack }) {
+  const backRef = useRef(null);
   const [selectedId, setSelectedId] = useState(() => templates[0]?.id ?? null);
 
   useEffect(() => {
@@ -133,11 +153,20 @@ export function TemplateSelectScreen({ templates, onPick, onBack }) {
 
   return (
     <div className="kiosk-templates kiosk-templates--stage">
-      <header className="kiosk-stage-header">
-        <button type="button" className="kiosk-nav-back" onClick={onBack}>
-          <span className="kiosk-nav-back__chevron" aria-hidden />
-          Back
+      <header className="kiosk-stage-header kiosk-stage-header--split">
+        <button
+          ref={backRef}
+          type="button"
+          className="kiosk-nav-back kiosk-chrome-orbit-target"
+          onClick={onBack}
+        >
+          <KioskOrbitChrome anchorRef={backRef} rxFallback={14} />
+          <span className="kiosk-nav-back__face">
+            <span className="kiosk-nav-back__chevron" aria-hidden />
+            Back
+          </span>
         </button>
+        <KioskHeaderTrailing />
       </header>
       <div className="kiosk-templates__body">
         <div className="kiosk-templates__center">

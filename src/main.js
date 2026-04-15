@@ -1,4 +1,5 @@
 const { app, BrowserWindow, ipcMain } = require('electron');
+const { registerJobExportsIpc, cleanupExpiredJobs } = require('./main/jobsStorage');
 
 // Handle creating/removing shortcuts on Windows when installing/uninstalling.
 if (require('electron-squirrel-startup')) {
@@ -38,6 +39,13 @@ ipcMain.handle('print-data-url', async (_event, dataUrl) => {
   });
 });
 
+/* Register as soon as ipcMain exists — must not wait for app.ready (renderer can invoke IPC early). */
+try {
+  registerJobExportsIpc(ipcMain);
+} catch (err) {
+  console.error('[catherine] job-exports IPC registration failed', err);
+}
+
 const createWindow = () => {
   const mainWindow = new BrowserWindow({
     width: 1440,
@@ -65,6 +73,12 @@ const createWindow = () => {
 // initialization and is ready to create browser windows.
 // Some APIs can only be used after this event occurs.
 app.whenReady().then(() => {
+  try {
+    cleanupExpiredJobs();
+  } catch (_) {
+    /* ignore */
+  }
+
   createWindow();
 
   // On OS X it's common to re-create a window in the app when the

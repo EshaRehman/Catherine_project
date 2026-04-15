@@ -52,7 +52,7 @@ export function TemplatesPage() {
 
       <div className="card-grid card-grid--templates">
         {templates.map((t) => (
-          <article key={t.id} className="card">
+          <article key={t.id} className="card admin-card">
             <div className="card-preview">
               <TemplateThemePreview template={t} variant="admin" />
             </div>

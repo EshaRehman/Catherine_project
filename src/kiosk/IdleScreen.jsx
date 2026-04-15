@@ -1,6 +1,6 @@
 import React from 'react';
 import { useApp } from '../state/AppContext.jsx';
-import idleLogo from '../assets/Robot with camera and vibrant logo.png';
+import { KioskHeaderTrailing } from './KioskHeaderTrailing.jsx';
 
 export function IdleScreen({ onStart, disabled }) {
   const { adminTheme } = useApp();
@@ -18,17 +18,11 @@ export function IdleScreen({ onStart, disabled }) {
         <div className="kiosk-idle__grain" />
       </div>
 
+      <header className="kiosk-idle__header kiosk-stage-header kiosk-stage-header--end">
+        <KioskHeaderTrailing />
+      </header>
+
       <div className="kiosk-idle__content">
-        <div className="kiosk-idle__logo-wrap">
-          <span className="kiosk-idle__logo-glow" aria-hidden />
-          <img
-            className="kiosk-idle__logo"
-            src={idleLogo}
-            alt="AI Photo Activations"
-            width={360}
-            height={160}
-          />
-        </div>
         <h1 className="kiosk-idle__title">
           {disabled ? (
             <>
