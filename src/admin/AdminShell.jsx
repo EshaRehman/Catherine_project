@@ -18,22 +18,25 @@ export function AdminShell({ children }) {
             </div>
           </div>
         </div>
-        <nav className="admin-nav admin-nav--vertical" aria-label="Admin sections">
-          <button
-            type="button"
-            className={adminRoute === 'events' ? 'is-active' : ''}
-            onClick={nav('events')}
-          >
-            Events
-          </button>
-          <button
-            type="button"
-            className={adminRoute === 'templates' ? 'is-active' : ''}
-            onClick={nav('templates')}
-          >
-            Templates
-          </button>
-        </nav>
+        <div className="admin-sidebar__sections">
+          <p className="admin-nav-section-label">Workspace</p>
+          <nav className="admin-nav admin-nav--vertical" aria-label="Admin sections">
+            <button
+              type="button"
+              className={adminRoute === 'events' ? 'is-active' : ''}
+              onClick={nav('events')}
+            >
+              Events
+            </button>
+            <button
+              type="button"
+              className={adminRoute === 'templates' ? 'is-active' : ''}
+              onClick={nav('templates')}
+            >
+              Templates
+            </button>
+          </nav>
+        </div>
       </aside>
       <div className="admin-body">
         <header className="admin-toolbar">

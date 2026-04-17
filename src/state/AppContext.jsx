@@ -25,7 +25,6 @@ export function AppProvider({ children }) {
   const [mode, setMode] = useState('kiosk'); // kiosk | admin
   const [adminRoute, setAdminRoute] = useState('events'); // events | templates | editor | eventForm
   const [editorTemplateId, setEditorTemplateId] = useState(null);
-  const [editorIsNew, setEditorIsNew] = useState(false);
   const [eventFormId, setEventFormId] = useState(null);
   const [adminTheme, setAdminTheme] = useState('light');
   const [templates, setTemplates] = useState(DEFAULT_TEMPLATES);
@@ -103,12 +102,8 @@ export function AppProvider({ children }) {
     [templates],
   );
 
-  const saveTemplate = useCallback((tpl, { asNew } = {}) => {
+  const saveTemplate = useCallback((tpl) => {
     setTemplates((prev) => {
-      if (asNew) {
-        const copy = { ...tpl, id: uid(), name: `${tpl.name} (copy)` };
-        return [...prev, copy];
-      }
       const i = prev.findIndex((t) => t.id === tpl.id);
       if (i === -1) return [...prev, tpl];
       const next = [...prev];
@@ -163,9 +158,9 @@ export function AppProvider({ children }) {
     setEvents((prev) => [...prev, copy]);
   }, [events]);
 
-  const openTemplateEditor = useCallback((id, isNew) => {
-    setEditorTemplateId(id);
-    setEditorIsNew(!!isNew);
+  /** Pass `null` to create a new template (draft only until Save). */
+  const openTemplateEditor = useCallback((id) => {
+    setEditorTemplateId(id ?? null);
     setAdminRoute('editor');
   }, []);
 
@@ -182,7 +177,6 @@ export function AppProvider({ children }) {
       adminRoute,
       setAdminRoute,
       editorTemplateId,
-      editorIsNew,
       eventFormId,
       setEventFormId,
       openEventForm,
@@ -211,7 +205,6 @@ export function AppProvider({ children }) {
       mode,
       adminRoute,
       editorTemplateId,
-      editorIsNew,
       eventFormId,
       openEventForm,
       adminTheme,

@@ -1,26 +1,27 @@
 import React, { useEffect, useState } from 'react';
 import { useApp } from '../state/AppContext.jsx';
-import { TemplateThemePreview } from '../components/TemplateThemePreview.jsx';
-import { getTemplateTagline } from '../constants/templateTaglines.js';
+import { KioskTemplateStyleCard } from '../components/KioskTemplateStyleCard.jsx';
 
 const uid = () =>
   `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 9)}`;
 
+const capitalizeFirst = (value) => {
+  const v = String(value || '');
+  if (!v) return '';
+  return v.charAt(0).toUpperCase() + v.slice(1);
+};
+
 function TemplatePickCard({ template, selected, onToggle }) {
   return (
-    <button
-      type="button"
-      className={`kiosk-tpl-card admin-tpl-pick${selected ? ' admin-tpl-pick--selected' : ''}`}
-      onClick={onToggle}
-    >
-      <TemplateThemePreview template={template} variant="kiosk" />
-      <div className="kiosk-tpl-footer">
-        <div className="kiosk-tpl-title">{template.name}</div>
-        {getTemplateTagline(template.previewClass) ? (
-          <div className="kiosk-tpl-tagline">{getTemplateTagline(template.previewClass)}</div>
-        ) : null}
-      </div>
-    </button>
+    <KioskTemplateStyleCard
+      template={template}
+      selected={selected}
+      onActivate={onToggle}
+      title={capitalizeFirst(template.name)}
+      role="checkbox"
+      ariaChecked={selected}
+      buttonClassName={`create-event-tpl-card${selected ? ' create-event-tpl-card--selected' : ''}`}
+    />
   );
 }
 
@@ -75,7 +76,7 @@ export function CreateEvent() {
     setFormError('');
     const ev = {
       id: existing?.id || uid(),
-      name: name.trim(),
+      name: capitalizeFirst(name.trim()),
       templateIds: [...templateIds],
       countdownSec: Math.max(1, Math.min(10, Number(existing?.countdownSec) || 3)),
       status: existing?.status || 'active',
@@ -86,60 +87,102 @@ export function CreateEvent() {
   };
 
   return (
-    <>
-      <div className="admin-page-head">
+    <div className="create-event-page">
+      <div className="admin-page-head create-event-page__head">
         <div className="admin-page-head__titles">
-          <h1 className="admin-page-title">{existing ? 'Edit event' : 'Create event'}</h1>
-          <p className="admin-page-sub">Name the experience and choose which looks guests can pick.</p>
+          <h1 className="admin-page-title">
+            {existing ? (
+              <>
+                Edit <span className="text-brand-gradient">event</span>
+              </>
+            ) : (
+              <>
+                Create <span className="text-brand-gradient">event</span>
+              </>
+            )}
+          </h1>
+          <p className="admin-page-sub">Add a name for this event, then choose which templates guests can use.</p>
         </div>
         <button type="button" className="btn btn-ghost" onClick={() => setAdminRoute('events')}>
           Cancel
         </button>
       </div>
 
-      <form className="panel panel--event-form admin-form admin-form--event" onSubmit={submit}>
-        <div className="section-title">Event info</div>
-        <div className="field">
-          <label htmlFor="ev-name">Event name</label>
-          <input
-            id="ev-name"
-            className="input"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            placeholder="e.g. Nike Launch"
-            required
-          />
-        </div>
+      <form
+        className="panel panel--event-form admin-form admin-form--event create-event-form"
+        onSubmit={submit}
+      >
+        <div className="create-event-page__ambient" aria-hidden="true" />
+        <div className="create-event-page__stage">
+          <div className="create-event-grid">
+            <section
+              className="create-event-card create-event-card--identity"
+              aria-labelledby="create-event-identity-title"
+            >
+              <h2 id="create-event-identity-title" className="create-event-card__title">
+                Event <span className="text-brand-gradient">name</span>
+                <span className="create-event-required" aria-label="Required">
+                  *
+                </span>
+              </h2>
+              <div className="field create-event-field--name">
+                <input
+                  id="ev-name"
+                  className="input"
+                  value={name}
+                  onChange={(e) => setName(capitalizeFirst(e.target.value))}
+                  placeholder="e.g. Company party"
+                  autoComplete="off"
+                  aria-labelledby="create-event-identity-title"
+                  aria-required="true"
+                  required
+                />
+              </div>
+            </section>
 
-        <div className="section-title">Select templates</div>
-        <p className="admin-page-sub admin-form__hint admin-form__hint--tight">
-          Tap cards to include them in the live gallery. Guests only see names and artwork.
-        </p>
-        {formError ? (
-          <p className="field-error" role="alert">
-            {formError}
-          </p>
-        ) : null}
-        <div className="kiosk-templates-grid kiosk-templates-grid--themes kiosk-templates-grid--inline admin-form__template-grid">
-          {templates.map((t) => (
-            <TemplatePickCard
-              key={t.id}
-              template={t}
-              selected={templateIds.includes(t.id)}
-              onToggle={() => toggleTpl(t.id)}
-            />
-          ))}
-        </div>
+            <section
+              className="create-event-card create-event-card--looks"
+              aria-labelledby="create-event-looks-title"
+            >
+              <h2 id="create-event-looks-title" className="create-event-card__title">
+                Select <span className="text-brand-gradient">templates</span>
+                <span className="create-event-required" aria-label="Required">
+                  *
+                </span>
+              </h2>
+              <p className="create-event-input-hint">Tap a template to add or remove it from this event.</p>
+              {formError ? (
+                <p className="field-error" role="alert">
+                  {formError}
+                </p>
+              ) : null}
+              <div className="create-event-template-well">
+                <div className="create-event-tpl-stage kiosk-templates--stage">
+                  <div className="create-event-template-grid kiosk-templates-grid kiosk-templates-grid--themes kiosk-templates-grid--themes-row">
+                  {templates.map((t) => (
+                    <TemplatePickCard
+                      key={t.id}
+                      template={t}
+                      selected={templateIds.includes(t.id)}
+                      onToggle={() => toggleTpl(t.id)}
+                    />
+                  ))}
+                  </div>
+                </div>
+              </div>
 
-        <div className="admin-form__actions">
-          <button type="submit" className="btn btn-primary">
-            Save event
-          </button>
-          <button type="button" className="btn btn-ghost" onClick={() => setAdminRoute('events')}>
-            Cancel
-          </button>
+              <div className="create-event-actions">
+                <button type="submit" className="btn btn-primary">
+                  Save event
+                </button>
+                <button type="button" className="btn btn-ghost" onClick={() => setAdminRoute('events')}>
+                  Cancel
+                </button>
+              </div>
+            </section>
+          </div>
         </div>
       </form>
-    </>
+    </div>
   );
 }

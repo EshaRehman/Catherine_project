@@ -1,14 +1,58 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useApp } from '../state/AppContext.jsx';
+import { ConfirmModal } from '../components/ConfirmModal.jsx';
+import { BackgroundCoverAdjustModal } from './BackgroundCoverAdjustModal.jsx';
 import { OUTPUT_EDITOR_MOCK_HEIGHT, OUTPUT_EDITOR_MOCK_WIDTH } from '../constants/outputFormat.js';
 import { compositePreviewMock } from '../utils/composite.js';
 
+/** Google Fonts loaded in `index.html` — stack falls back to system-ui. */
 const FONTS = [
+  { label: 'Inter', value: "'Inter', system-ui, sans-serif" },
   { label: 'DM Sans', value: "'DM Sans', system-ui, sans-serif" },
-  { label: 'System UI', value: 'system-ui, sans-serif' },
+  { label: 'Roboto', value: "'Roboto', system-ui, sans-serif" },
+  { label: 'Open Sans', value: "'Open Sans', system-ui, sans-serif" },
+  { label: 'Lato', value: "'Lato', system-ui, sans-serif" },
+  { label: 'Montserrat', value: "'Montserrat', system-ui, sans-serif" },
+  { label: 'Poppins', value: "'Poppins', system-ui, sans-serif" },
+  { label: 'Nunito', value: "'Nunito', system-ui, sans-serif" },
+  { label: 'Raleway', value: "'Raleway', system-ui, sans-serif" },
+  { label: 'Source Sans 3', value: "'Source Sans 3', system-ui, sans-serif" },
+  { label: 'Work Sans', value: "'Work Sans', system-ui, sans-serif" },
+  { label: 'Rubik', value: "'Rubik', system-ui, sans-serif" },
+  { label: 'Quicksand', value: "'Quicksand', system-ui, sans-serif" },
+  { label: 'Barlow', value: "'Barlow', system-ui, sans-serif" },
+  { label: 'Fira Sans', value: "'Fira Sans', system-ui, sans-serif" },
+  { label: 'Ubuntu', value: "'Ubuntu', system-ui, sans-serif" },
+  { label: 'Noto Sans', value: "'Noto Sans', system-ui, sans-serif" },
+  { label: 'Merriweather', value: "'Merriweather', Georgia, serif" },
+  { label: 'Playfair Display', value: "'Playfair Display', Georgia, serif" },
+  { label: 'Oswald', value: "'Oswald', system-ui, sans-serif" },
+  { label: 'Bebas Neue', value: "'Bebas Neue', Impact, system-ui, sans-serif" },
+  { label: 'Pacifico', value: "'Pacifico', cursive" },
+  { label: 'Caveat', value: "'Caveat', cursive" },
   { label: 'Georgia', value: 'Georgia, serif' },
+  { label: 'System UI', value: 'system-ui, sans-serif' },
   { label: 'Impact', value: 'Impact, Haettenschweiler, sans-serif' },
 ];
+
+function IconUpload() {
+  return (
+    <svg
+      className="editor-image-slot__upload-icon"
+      width="18"
+      height="18"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden
+    >
+      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12" />
+    </svg>
+  );
+}
 
 function normalizeFontSizePx(n) {
   const v = Math.min(96, Math.max(12, Math.round(Number(n) || 42)));
@@ -20,27 +64,113 @@ function clampInt(value, min, max) {
   return Math.min(max, Math.max(min, Math.round(Number(value) || 0)));
 }
 
-function FileUploadRow({ id, title, cta = 'Choose file', subtitle, onChange }) {
+/** Compact image target: dashed tile, centered thumbnail (contain), clear control top-right of field. */
+function EditorImageSlot({ id, title, thumbUrl, filled, inputKey, onChange, onClear, emptyLabel }) {
   return (
-    <div className="field field--full">
-      <div className="field-heading">{title}</div>
-      <label className="file-upload" htmlFor={id}>
-        <input
-          id={id}
-          type="file"
-          accept="image/*"
-          className="file-upload__native"
-          onChange={onChange}
-        />
-        <span className="file-upload__face">
-          <span className="file-upload__glyph" aria-hidden />
-          <span className="file-upload__copy">
-            <strong>{cta}</strong>
-            {subtitle ? <small>{subtitle}</small> : null}
-          </span>
-        </span>
-      </label>
+    <div className={`editor-image-slot editor-image-slot--minimal ${filled ? 'editor-image-slot--filled' : ''}`}>
+      <div className="editor-image-slot__chrome">
+        <label className="editor-image-slot__zone" htmlFor={id}>
+          <input
+            key={inputKey}
+            id={id}
+            type="file"
+            accept="image/*"
+            className="editor-image-slot__input"
+            aria-label={title}
+            onChange={onChange}
+          />
+          {thumbUrl ? (
+            <span className="editor-image-slot__thumb-frame">
+              <img src={thumbUrl} alt="" className="editor-image-slot__img" />
+            </span>
+          ) : (
+            <span className="editor-image-slot__empty">
+              <IconUpload />
+              <span className="editor-image-slot__empty-text">{emptyLabel}</span>
+            </span>
+          )}
+        </label>
+        {filled ? (
+          <button
+            type="button"
+            className="editor-image-slot__x"
+            aria-label={`Remove ${title}`}
+            onMouseDown={(e) => e.stopPropagation()}
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              onClear();
+            }}
+          >
+            <svg
+              className="editor-image-slot__x-icon"
+              width="11"
+              height="11"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2.4"
+              strokeLinecap="round"
+              aria-hidden="true"
+            >
+              <path d="M18 6 6 18M6 6l12 12" />
+            </svg>
+          </button>
+        ) : null}
+      </div>
     </div>
+  );
+}
+
+/** Number input: edit freely (incl. backspace); commit clamped value on blur; spinners stay native. */
+function BlurCommitNumberInput({
+  id,
+  className,
+  min,
+  max,
+  step,
+  value,
+  disabled,
+  inputMode,
+  ariaLabel,
+  onCommit,
+}) {
+  const [txt, setTxt] = useState(null);
+  useEffect(() => {
+    setTxt(null);
+  }, [value]);
+
+  const display = txt !== null ? txt : String(value);
+
+  return (
+    <input
+      id={id}
+      type="number"
+      className={className}
+      min={min}
+      max={max}
+      step={step}
+      disabled={disabled}
+      inputMode={inputMode}
+      aria-label={ariaLabel}
+      value={display}
+      onChange={(e) => setTxt(e.target.value)}
+      onBlur={() => {
+        const raw = txt;
+        setTxt(null);
+        const v = (raw ?? '').trim();
+        if (v === '' || v === '-') {
+          onCommit(value);
+          return;
+        }
+        const n = parseInt(String(v).replace(/\D/g, ''), 10);
+        if (Number.isNaN(n)) {
+          onCommit(value);
+          return;
+        }
+        onCommit(clampInt(n, min, max));
+      }}
+    />
   );
 }
 
@@ -59,17 +189,18 @@ function SliderWithInput({
   return (
     <div className="field field--full slider-field">
       <div className="slider-field__top">
-        <label htmlFor={id}>{label}</label>
-        <input
-          type="number"
-          className="input slider-field__number"
+        <label htmlFor={`${id}-num`}>{label}</label>
+        <BlurCommitNumberInput
+          id={`${id}-num`}
+          className="input slider-field__number slider-field__number--compact"
           min={min}
           max={max}
           step={step}
           value={safe}
           disabled={disabled}
-          onChange={(e) => onChange(clampInt(e.target.value, min, max))}
-          aria-label={`${label} value`}
+          inputMode="numeric"
+          ariaLabel={`${label} value`}
+          onCommit={(n) => onChange(n)}
         />
       </div>
       <input
@@ -127,7 +258,7 @@ function PositionMiniPad({ title, marker, x, y, onPlace }) {
   };
 
   return (
-    <div className="field">
+    <div className="field field--full">
       <div className="position-pad-toolbar">
         <label>{title}</label>
         <div className="position-mini-meta">
@@ -157,6 +288,96 @@ function PositionMiniPad({ title, marker, x, y, onPlace }) {
   );
 }
 
+function EditorFontPicker({ id, label, value, fonts, onChange }) {
+  const [open, setOpen] = useState(false);
+  const rootRef = useRef(null);
+  const selected = fonts.find((f) => f.value === value) ?? {
+    label: 'Saved font',
+    value,
+  };
+
+  useEffect(() => {
+    if (!open) return;
+    const onDocDown = (e) => {
+      if (rootRef.current && !rootRef.current.contains(e.target)) setOpen(false);
+    };
+    const onKey = (e) => {
+      if (e.key === 'Escape') setOpen(false);
+    };
+    document.addEventListener('mousedown', onDocDown);
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('mousedown', onDocDown);
+      document.removeEventListener('keydown', onKey);
+    };
+  }, [open]);
+
+  return (
+    <div
+      className={`field editor-font-picker${open ? ' is-open' : ''}`}
+      ref={rootRef}
+    >
+      <label className="editor-font-picker__label" id={`${id}-lbl`} htmlFor={id}>
+        {label}
+      </label>
+      <button
+        type="button"
+        id={id}
+        className="editor-font-picker__trigger"
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        aria-labelledby={`${id}-lbl`}
+        onClick={() => setOpen((o) => !o)}
+      >
+        <span className="editor-font-picker__trigger-text" style={{ fontFamily: value }}>
+          {selected.label}
+        </span>
+        <span className="editor-font-picker__chev" aria-hidden />
+      </button>
+      {open ? (
+        <div className="editor-font-picker__panel" role="listbox" aria-labelledby={`${id}-lbl`}>
+          <div className="editor-font-picker__scroll">
+            {fonts.map((f) => (
+              <button
+                key={f.value}
+                type="button"
+                role="option"
+                aria-selected={f.value === value}
+                className={`editor-font-picker__option ${f.value === value ? 'is-selected' : ''}`}
+                style={{ fontFamily: f.value }}
+                onClick={() => {
+                  onChange(f.value);
+                  setOpen(false);
+                }}
+              >
+                <span className="editor-font-picker__option-label">{f.label}</span>
+                {f.value === value ? (
+                  <span className="editor-font-picker__check" aria-hidden>
+                    ✓
+                  </span>
+                ) : null}
+              </button>
+            ))}
+          </div>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function normalizeDraft(raw) {
+  const copy = JSON.parse(JSON.stringify(raw));
+  copy.steps = Math.min(20, Math.max(0, Number(copy.steps) || 6));
+  copy.fontSize = normalizeFontSizePx(copy.fontSize);
+  const lp = Math.round(Number(copy.logoScale || 0.22) * 100);
+  copy.logoScale = Math.min(45, Math.max(8, lp)) / 100;
+  return copy;
+}
+
+function draftFingerprint(d) {
+  return JSON.stringify(normalizeDraft(d));
+}
+
 export function TemplateEditor() {
   const {
     editorTemplateId,
@@ -166,24 +387,35 @@ export function TemplateEditor() {
     createDefaultTemplate,
   } = useApp();
 
-  const [draft, setDraft] = useState(() => createDefaultTemplate());
+  const [draft, setDraft] = useState(() =>
+    createDefaultTemplate({ name: '', previewClass: 'tpl-preview--thrones' }),
+  );
   const [previewUrl, setPreviewUrl] = useState(null);
   const [generating, setGenerating] = useState(false);
+  const [discardConfirmOpen, setDiscardConfirmOpen] = useState(false);
+  const [bgCropSrc, setBgCropSrc] = useState(null);
+  const [editorHydrated, setEditorHydrated] = useState(false);
   const stageRef = useRef(null);
   const dragRef = useRef(null);
+  const baselineFingerprintRef = useRef('');
+
+  const isEditing = Boolean(editorTemplateId);
 
   useEffect(() => {
-    const t = editorTemplateId ? getTemplate(editorTemplateId) : null;
-    if (t) {
-      const copy = JSON.parse(JSON.stringify(t));
-      copy.steps = Math.min(20, Math.max(0, Number(copy.steps) || 6));
-      copy.fontSize = normalizeFontSizePx(copy.fontSize);
-      const lp = Math.round(Number(copy.logoScale || 0.22) * 100);
-      copy.logoScale = Math.min(45, Math.max(8, lp)) / 100;
-      setDraft(copy);
-    } else setDraft(createDefaultTemplate());
+    let next;
+    if (editorTemplateId) {
+      const t = getTemplate(editorTemplateId);
+      next = t
+        ? normalizeDraft(t)
+        : normalizeDraft(createDefaultTemplate({ name: '', previewClass: 'tpl-preview--thrones' }));
+    } else {
+      next = normalizeDraft(createDefaultTemplate({ name: '', previewClass: 'tpl-preview--thrones' }));
+    }
+    baselineFingerprintRef.current = draftFingerprint(next);
+    setDraft(next);
     setPreviewUrl(null);
-  }, [editorTemplateId]);
+    setEditorHydrated(true);
+  }, [editorTemplateId, getTemplate, createDefaultTemplate]);
 
   const readFileDataUrl = (file) =>
     new Promise((resolve, reject) => {
@@ -197,7 +429,8 @@ export function TemplateEditor() {
     const f = e.target.files?.[0];
     if (!f) return;
     const url = await readFileDataUrl(f);
-    setDraft((d) => ({ ...d, backgroundUrl: url }));
+    setBgCropSrc(url);
+    e.target.value = '';
   };
 
   const onLogoFile = async (e) => {
@@ -205,6 +438,7 @@ export function TemplateEditor() {
     if (!f) return;
     const url = await readFileDataUrl(f);
     setDraft((d) => ({ ...d, logoUrl: url }));
+    e.target.value = '';
   };
 
   const previewGenerate = async () => {
@@ -268,8 +502,25 @@ export function TemplateEditor() {
     };
   }, [pctFromEvent, draft.logoX, draft.logoY]);
 
-  const save = (asNew) => {
-    saveTemplate(draft, { asNew });
+  const isDirty =
+    editorHydrated && draftFingerprint(draft) !== baselineFingerprintRef.current;
+
+  const handleCancel = () => {
+    if (isDirty) setDiscardConfirmOpen(true);
+    else setAdminRoute('templates');
+  };
+
+  const confirmDiscard = () => {
+    setAdminRoute('templates');
+  };
+
+  const handleSave = () => {
+    const name = draft.name.trim();
+    if (!name) {
+      window.alert('Please enter a template name before saving.');
+      return;
+    }
+    saveTemplate({ ...draft, name });
     setAdminRoute('templates');
   };
 
@@ -281,26 +532,53 @@ export function TemplateEditor() {
 
   return (
     <div className="template-editor-page">
+      <BackgroundCoverAdjustModal
+        open={Boolean(bgCropSrc)}
+        imageSrc={bgCropSrc}
+        onClose={() => setBgCropSrc(null)}
+        onApply={(dataUrl) => setDraft((d) => ({ ...d, backgroundUrl: dataUrl }))}
+      />
+      <ConfirmModal
+        open={discardConfirmOpen}
+        title="Discard changes?"
+        message="You have unsaved changes. If you leave now, they will be lost."
+        confirmLabel="Discard changes"
+        cancelLabel="Keep editing"
+        destructive
+        onConfirm={confirmDiscard}
+        onClose={() => setDiscardConfirmOpen(false)}
+      />
       <div className="admin-page-head template-editor-page__head">
         <div className="admin-page-head__titles">
-          <h1 className="admin-page-title">Template editor</h1>
-          <p className="admin-page-sub">Adjust the look; the live app stays visual-only.</p>
+          <h1 className="admin-page-title">
+            {isEditing ? (
+              <>
+                Edit <span className="text-brand-gradient">template</span>
+              </>
+            ) : (
+              <>
+                Create <span className="text-brand-gradient">template</span>
+              </>
+            )}
+          </h1>
+          <p className="admin-page-sub">
+            {isEditing
+              ? 'Adjust the look; changes apply after you save.'
+              : 'Configure the look, then save to add it to your library. Nothing is stored until you save.'}
+          </p>
         </div>
         <div className="template-editor-page__actions">
-          <button type="button" className="btn btn-ghost" onClick={() => setAdminRoute('templates')}>
-            Back
+          <button type="button" className="btn btn-ghost" onClick={handleCancel}>
+            Cancel
           </button>
-          <button type="button" className="btn btn-primary" onClick={() => save(false)}>
+          <button type="button" className="btn btn-primary" onClick={handleSave}>
             Save
-          </button>
-          <button type="button" className="btn btn-ghost" onClick={() => save(true)}>
-            Save as new
           </button>
         </div>
       </div>
 
       <div className="editor-split template-editor-page__split">
-        <div className="preview-stage-wrap preview-stage-wrap--editor">
+        <div className="preview-stage-wrap preview-stage-wrap--editor template-editor-page__preview-col">
           <div ref={stageRef} className="preview-stage preview-stage--compact" style={{ position: 'relative' }}>
             {previewUrl ? (
               <img src={previewUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
@@ -371,40 +649,56 @@ export function TemplateEditor() {
             className="btn btn-primary template-editor-page__preview-btn"
             onClick={previewGenerate}
             disabled={generating}
+            title="Builds a single flat mock image from your current layout (background, text, logo). The stage above is for editing; this shows an export-style preview when you want to see it flattened."
           >
-            {generating ? 'Generating…' : 'Preview generate'}
+            {generating ? 'Generating…' : 'Generate preview'}
           </button>
-          <p className="template-editor-page__preview-hint">Mock layout preview — connect your inference API for real output.</p>
         </div>
 
-        <div className="editor-scroll panel template-editor-page__form template-editor-form admin-form-panel">
+        <div className="panel template-editor-page__form template-editor-form admin-form-panel">
           <section className="editor-card">
-            <h2 className="editor-card__title">Generation Settings</h2>
-            <div className="editor-card__grid">
-              <div className="field">
-                <label htmlFor="tn">Template name</label>
-                <input
-                  id="tn"
-                  className="input"
-                  value={draft.name}
-                  onChange={(e) => setDraft({ ...draft, name: e.target.value })}
-                />
+            <h2 className="editor-card__title">
+              Generation <span className="text-brand-gradient">settings</span>
+            </h2>
+            <p className="editor-card__intro">Name your template, set the scene, and tune generation strength.</p>
+            <div className="editor-card__grid editor-card__grid--stack">
+              <div className="editor-row editor-row--pair editor-row--name-bg">
+                <div className="field field--pair-cell">
+                  <label className="editor-pair-label" htmlFor="tn">
+                    Template name
+                  </label>
+                  <input
+                    id="tn"
+                    className="input input--pair-tall"
+                    value={draft.name}
+                    onChange={(e) => setDraft({ ...draft, name: e.target.value })}
+                    placeholder="e.g. F1 Racing, Winter Gala"
+                    autoComplete="off"
+                  />
+                </div>
+                <div className="field field--upload-tile field--pair-cell">
+                  <span className="editor-pair-label">Background</span>
+                  <EditorImageSlot
+                    id="tpl-bg"
+                    title="Background image"
+                    emptyLabel="Upload image"
+                    thumbUrl={draft.backgroundUrl || null}
+                    filled={Boolean(draft.backgroundUrl)}
+                    inputKey={`bg-${editorTemplateId || 'new'}-${draft.backgroundUrl ? '1' : '0'}`}
+                    onChange={onBgFile}
+                    onClear={() => setDraft((d) => ({ ...d, backgroundUrl: null }))}
+                  />
+                </div>
               </div>
-              <FileUploadRow
-                id="tpl-bg"
-                title="Background image"
-                cta="+ Upload Background"
-                subtitle="Drag & drop or click to upload"
-                onChange={onBgFile}
-              />
               <div className="field field--full">
                 <label htmlFor="pr">Prompt</label>
                 <textarea
                   id="pr"
-                  className="textarea textarea--compact"
-                  rows={3}
+                  className="textarea textarea--editor-prompt"
+                  rows={4}
                   value={draft.prompt}
                   onChange={(e) => setDraft({ ...draft, prompt: e.target.value })}
+                  placeholder="Describe the look you want for generated portraits…"
                 />
               </div>
               <SliderWithInput
@@ -420,7 +714,10 @@ export function TemplateEditor() {
           </section>
 
           <section className="editor-card">
-            <h2 className="editor-card__title">Text Overlay</h2>
+            <h2 className="editor-card__title">
+              Text <span className="text-brand-gradient">overlay</span>
+            </h2>
+            <p className="editor-card__intro">Guest-facing headline, typography, and placement on the preview.</p>
             <div className="editor-card__grid">
               <div className="field">
                 <label htmlFor="ov">Text</label>
@@ -432,43 +729,36 @@ export function TemplateEditor() {
                   placeholder="F1 EXPERIENCE"
                 />
               </div>
-              <div className="field">
-                <label htmlFor="font">Font</label>
-                <select
-                  id="font"
-                  className="select"
-                  value={draft.fontFamily}
-                  onChange={(e) => setDraft({ ...draft, fontFamily: e.target.value })}
-                >
-                  {FONTS.map((f) => (
-                    <option key={f.value} value={f.value}>
-                      {f.label}
-                    </option>
-                  ))}
-                </select>
-              </div>
+              <EditorFontPicker
+                id="font"
+                label="Font"
+                value={draft.fontFamily}
+                fonts={FONTS}
+                onChange={(fontFamily) => setDraft((d) => ({ ...d, fontFamily }))}
+              />
               <div className="field">
                 <label htmlFor="fsz">Font size</label>
-                <input
+                <BlurCommitNumberInput
                   id="fsz"
-                  type="number"
-                  className="input"
+                  className="input input--num-wide"
                   min={12}
                   max={96}
                   step={2}
                   value={draft.fontSize}
-                  onChange={(e) =>
-                    setDraft({ ...draft, fontSize: normalizeFontSizePx(e.target.value) })
+                  inputMode="numeric"
+                  ariaLabel="Font size in pixels"
+                  onCommit={(n) =>
+                    setDraft((d) => ({ ...d, fontSize: normalizeFontSizePx(n) }))
                   }
                 />
               </div>
               <div className="field">
                 <label htmlFor="tc">Text color</label>
-                <div className="color-field">
+                <div className="color-field color-field--editor-swatch">
                   <input
                     id="tc"
                     type="color"
-                    className="input-color"
+                    className="input-color input-color--bare"
                     value={draft.textColor?.startsWith('#') ? draft.textColor : '#ffffff'}
                     onChange={(e) => setDraft({ ...draft, textColor: e.target.value })}
                   />
@@ -492,32 +782,45 @@ export function TemplateEditor() {
           </section>
 
           <section className="editor-card">
-            <h2 className="editor-card__title">Logo Settings</h2>
-            <div className="editor-card__grid">
-              <FileUploadRow
-                id="tpl-logo"
-                title="Logo"
-                cta="+ Upload Logo"
-                subtitle="Drag & drop or click to upload"
-                onChange={onLogoFile}
-              />
-              <div className="field">
-                <label htmlFor="logo-scale">Scale</label>
-                <input
-                  id="logo-scale"
-                  type="number"
-                  className="input"
-                  min={8}
-                  max={45}
-                  step={1}
-                  value={Math.round(draft.logoScale * 100)}
-                  onChange={(e) =>
-                    setDraft({
-                      ...draft,
-                      logoScale: clampInt(e.target.value, 8, 45) / 100,
-                    })
-                  }
-                />
+            <h2 className="editor-card__title">
+              Logo <span className="text-brand-gradient">settings</span>
+            </h2>
+            <p className="editor-card__intro">
+              Optional mark on the preview, drag it on the stage to reposition.
+            </p>
+            <div className="editor-card__grid editor-card__grid--stack">
+              <div className="editor-row editor-row--pair editor-row--logo-scale">
+                <div className="field field--upload-tile field--pair-cell">
+                  <span className="editor-pair-label">Logo</span>
+                  <EditorImageSlot
+                    id="tpl-logo"
+                    title="Logo"
+                    emptyLabel="Upload logo"
+                    thumbUrl={draft.logoUrl || null}
+                    filled={Boolean(draft.logoUrl)}
+                    inputKey={`logo-${editorTemplateId || 'new'}-${draft.logoUrl ? '1' : '0'}`}
+                    onChange={onLogoFile}
+                    onClear={() => setDraft((d) => ({ ...d, logoUrl: null }))}
+                  />
+                </div>
+                <div className="field field--scale-inline field--pair-cell">
+                  <label className="editor-pair-label" htmlFor="logo-scale">
+                    Scale
+                  </label>
+                  <BlurCommitNumberInput
+                    id="logo-scale"
+                    className="input input--num-wide input--pair-tall"
+                    min={8}
+                    max={45}
+                    step={1}
+                    value={Math.round(draft.logoScale * 100)}
+                    inputMode="numeric"
+                    ariaLabel="Logo scale percent"
+                    onCommit={(n) =>
+                      setDraft((d) => ({ ...d, logoScale: clampInt(n, 8, 45) / 100 }))
+                    }
+                  />
+                </div>
               </div>
               <PositionMiniPad
                 title="Logo position"

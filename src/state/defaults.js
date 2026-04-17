@@ -9,7 +9,7 @@ const uid = () =>
 export function createDefaultTemplate(overrides = {}) {
   return {
     id: uid(),
-    name: 'Untitled',
+    name: '',
     backgroundUrl: null,
     prompt: '',
     negativePrompt: '',
