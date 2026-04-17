@@ -155,6 +155,40 @@ async function fillCanvasBackground(ctx, template, width, height) {
   ctx.fillRect(0, 0, width, height);
 }
 
+/** Text + logo on top of background (and subject), same layout as admin “Generate preview”. */
+async function drawTemplateOverlays(ctx, template, width, height) {
+  const text = (template.overlayText && String(template.overlayText).trim()) || '';
+  if (text) {
+    const tx = ((Number(template.textX) || 50) / 100) * width;
+    const ty = ((Number(template.textY) || 78) / 100) * height;
+    const fs = Math.max(14, Math.round((template.fontSize || 40) * (width / OUTPUT_WIDTH)));
+    ctx.font = `700 ${fs}px ${template.fontFamily || 'DM Sans, sans-serif'}`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.lineWidth = Math.max(3, fs * 0.07);
+    ctx.strokeStyle = 'rgba(0,0,0,0.45)';
+    ctx.fillStyle = template.textColor || '#fff';
+    ctx.strokeText(text, tx, ty);
+    ctx.fillText(text, tx, ty);
+  }
+
+  if (template.logoUrl) {
+    try {
+      const lg = await loadImage(template.logoUrl);
+      const logoScale = Number(template.logoScale);
+      const scale = Number.isFinite(logoScale) && logoScale > 0 ? logoScale : 0.2;
+      const base = Math.min(width, height) * scale;
+      const lw = (lg.width / lg.height) * base;
+      const lh = base;
+      const lx = ((Number(template.logoX) || 88) / 100) * width - lw / 2;
+      const ly = ((Number(template.logoY) || 10) / 100) * height - lh / 2;
+      ctx.drawImage(lg, lx, ly, lw, lh);
+    } catch {
+      /* skip */
+    }
+  }
+}
+
 export async function compositePortrait({
   subjectDataUrl,
   template,
@@ -172,10 +206,11 @@ export async function compositePortrait({
   try {
     subj = await loadImage(subjectDataUrl);
   } catch {
+    await drawTemplateOverlays(ctx, template, width, height);
     return canvas.toDataURL('image/jpeg', 0.92);
   }
 
-  /* Rounded-rect portrait window over theme (kiosk: no caption / logo baked in) */
+  /* Rounded-rect portrait window over theme */
   const rw = width * 0.84;
   const rh = height * 0.66;
   const rx = (width - rw) / 2;
@@ -200,6 +235,8 @@ export async function compositePortrait({
   ctx.filter = subjectFilterForClass(template.previewClass);
   ctx.drawImage(subj, sx, sy, sw, sh);
   ctx.restore();
+
+  await drawTemplateOverlays(ctx, template, width, height);
 
   return canvas.toDataURL('image/jpeg', 0.92);
 }
@@ -233,34 +270,7 @@ export async function compositePreviewMock(
     ctx.fill();
   }
 
-  const mockOverlay = (template.overlayText && String(template.overlayText).trim()) || '';
-  if (mockOverlay) {
-    const tx = (template.textX / 100) * width;
-    const ty = (template.textY / 100) * height;
-    const fs = Math.max(14, Math.round((template.fontSize || 40) * (width / OUTPUT_WIDTH)));
-    ctx.font = `700 ${fs}px ${template.fontFamily || 'DM Sans, sans-serif'}`;
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.lineWidth = Math.max(3, fs * 0.07);
-    ctx.strokeStyle = 'rgba(0,0,0,0.45)';
-    ctx.fillStyle = template.textColor || '#fff';
-    ctx.strokeText(mockOverlay, tx, ty);
-    ctx.fillText(mockOverlay, tx, ty);
-  }
-
-  if (template.logoUrl) {
-    try {
-      const lg = await loadImage(template.logoUrl);
-      const base = Math.min(width, height) * (template.logoScale || 0.2);
-      const lw = (lg.width / lg.height) * base;
-      const lh = base;
-      const lx = (template.logoX / 100) * width - lw / 2;
-      const ly = (template.logoY / 100) * height - lh / 2;
-      ctx.drawImage(lg, lx, ly, lw, lh);
-    } catch {
-      /* skip */
-    }
-  }
+  await drawTemplateOverlays(ctx, template, width, height);
 
   return canvas.toDataURL('image/jpeg', 0.88);
 }

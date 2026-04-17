@@ -24,10 +24,14 @@ function RegenerateIcon({ className }) {
   );
 }
 
-/** Template art only (not composite). Layout matches camera/processing so the frame stays put. */
-export function ResultScreen({ template, onQR, onRegenerate }) {
+/**
+ * Shows the flattened composite from processing (background + guest + text + logo).
+ * Falls back to template plate only if no result URL is passed.
+ */
+export function ResultScreen({ resultUrl, template, onQR, onRegenerate }) {
   const pc = template?.previewClass || 'tpl-preview--thrones';
-  const url = template?.backgroundUrl;
+  const fallbackUrl = template?.backgroundUrl;
+  const displayUrl = resultUrl || fallbackUrl;
 
   return (
     <div className="result-screen">
@@ -41,8 +45,8 @@ export function ResultScreen({ template, onQR, onRegenerate }) {
       <div className="result-screen__main">
         <div className="result-screen__viewport kiosk-flow-viewport">
           <div className="kiosk-portrait-frame kiosk-flow-frame kiosk-portrait-frame--result">
-            {url ? (
-              <img className="kiosk-portrait-frame__media" src={url} alt="" />
+            {displayUrl ? (
+              <img className="kiosk-portrait-frame__media" src={displayUrl} alt="" />
             ) : (
               <div className={`kiosk-portrait-frame__media kiosk-portrait-frame__plate ${pc}`} />
             )}
