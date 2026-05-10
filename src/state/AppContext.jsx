@@ -27,9 +27,10 @@ export function AppProvider({ children }) {
   const [editorTemplateId, setEditorTemplateId] = useState(null);
   const [editorIsNew, setEditorIsNew] = useState(false);
   const [eventFormId, setEventFormId] = useState(null);
-  const [adminTheme, setAdminTheme] = useState('light');
   const [templates, setTemplates] = useState(DEFAULT_TEMPLATES);
   const [events, setEvents] = useState([]);
+  /** photoCounts: { [eventId]: number } — sourced from disk via main process; not persisted. */
+  const [photoCounts, setPhotoCounts] = useState({});
   const [adminPassword, setAdminPassword] = useState(DEFAULT_ADMIN_PASSWORD);
   const [settings, setSettings] = useState({
     globalPromptSuffix: '',
@@ -76,8 +77,6 @@ export function AppProvider({ children }) {
       if (s.settings && typeof s.settings === 'object')
         setSettings((prev) => ({ ...prev, ...s.settings }));
     }
-    if (s?.adminTheme === 'dark' || s?.adminTheme === 'light')
-      setAdminTheme(s.adminTheme);
     setHydrated(true);
   }, []);
 
@@ -88,9 +87,8 @@ export function AppProvider({ children }) {
       events,
       adminPassword,
       settings,
-      adminTheme,
     });
-  }, [hydrated, templates, events, adminPassword, settings, adminTheme]);
+  }, [hydrated, templates, events, adminPassword, settings]);
 
   const getTemplate = useCallback(
     (id) => templates.find((t) => t.id === id) || null,
@@ -143,6 +141,21 @@ export function AppProvider({ children }) {
     setSettings((prev) =>
       prev.activeEventId === id ? { ...prev, activeEventId: null } : prev,
     );
+    setPhotoCounts((prev) => {
+      if (!(id in prev)) return prev;
+      const next = { ...prev };
+      delete next[id];
+      return next;
+    });
+    /* Best-effort wipe of any saved photos on disk for this event. */
+    try {
+      const bridge = typeof window !== 'undefined' ? window.catherine?.jobs : null;
+      if (bridge?.clearPhotos) {
+        bridge.clearPhotos({ eventId: id }).catch(() => {});
+      }
+    } catch {
+      /* ignore */
+    }
   }, []);
 
   const duplicateEvent = useCallback((id) => {
@@ -156,6 +169,94 @@ export function AppProvider({ children }) {
     };
     setEvents((prev) => [...prev, copy]);
   }, [events]);
+
+  /* ---- Job photo bridge (Electron main process) ---- */
+
+  const jobsBridge = typeof window !== 'undefined' ? window.catherine?.jobs : null;
+
+  const refreshEventPhotoCount = useCallback(
+    async (eventId) => {
+      if (!eventId || !jobsBridge?.listPhotos) return 0;
+      try {
+        const res = await jobsBridge.listPhotos({ eventId });
+        const count = res?.count ?? 0;
+        setPhotoCounts((prev) => ({ ...prev, [eventId]: count }));
+        return count;
+      } catch {
+        return 0;
+      }
+    },
+    [jobsBridge],
+  );
+
+  const recordEventPhoto = useCallback(
+    async ({ eventId, dataUrl, capturedAt }) => {
+      if (!eventId || !dataUrl || !jobsBridge?.savePhoto) return null;
+      try {
+        const res = await jobsBridge.savePhoto({ eventId, dataUrl, capturedAt });
+        setPhotoCounts((prev) => ({
+          ...prev,
+          [eventId]: (prev[eventId] || 0) + 1,
+        }));
+        return res;
+      } catch {
+        return null;
+      }
+    },
+    [jobsBridge],
+  );
+
+  const downloadEventJob = useCallback(
+    async ({ eventId, eventName }) => {
+      if (!jobsBridge?.downloadZip) {
+        return { ok: false, reason: 'unsupported' };
+      }
+      return jobsBridge.downloadZip({ eventId, eventName });
+    },
+    [jobsBridge],
+  );
+
+  const emailEventJob = useCallback(
+    async ({ eventId, eventName, recipient, message }) => {
+      if (!jobsBridge?.emailZip) {
+        return { ok: false, reason: 'unsupported' };
+      }
+      return jobsBridge.emailZip({ eventId, eventName, recipient, message });
+    },
+    [jobsBridge],
+  );
+
+  const clearEventJob = useCallback(
+    async ({ eventId }) => {
+      if (!jobsBridge?.clearPhotos) return { removed: 0 };
+      const res = await jobsBridge.clearPhotos({ eventId });
+      setPhotoCounts((prev) => ({ ...prev, [eventId]: 0 }));
+      return res;
+    },
+    [jobsBridge],
+  );
+
+  /* Refresh counts whenever the events list changes (after hydration). */
+  useEffect(() => {
+    if (!hydrated || !jobsBridge?.listPhotos) return;
+    let cancelled = false;
+    (async () => {
+      const next = {};
+      for (const ev of events) {
+        try {
+          const res = await jobsBridge.listPhotos({ eventId: ev.id });
+          if (cancelled) return;
+          next[ev.id] = res?.count ?? 0;
+        } catch {
+          next[ev.id] = 0;
+        }
+      }
+      if (!cancelled) setPhotoCounts(next);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [hydrated, events, jobsBridge]);
 
   const openTemplateEditor = useCallback((id, isNew) => {
     setEditorTemplateId(id);
@@ -180,8 +281,6 @@ export function AppProvider({ children }) {
       eventFormId,
       setEventFormId,
       openEventForm,
-      adminTheme,
-      setAdminTheme,
       openTemplateEditor,
       templates,
       setTemplates,
@@ -199,6 +298,13 @@ export function AppProvider({ children }) {
       deleteEvent,
       duplicateEvent,
       createDefaultTemplate,
+      photoCounts,
+      jobsSupported: !!jobsBridge,
+      recordEventPhoto,
+      refreshEventPhotoCount,
+      downloadEventJob,
+      emailEventJob,
+      clearEventJob,
     }),
     [
       hydrated,
@@ -208,7 +314,6 @@ export function AppProvider({ children }) {
       editorIsNew,
       eventFormId,
       openEventForm,
-      adminTheme,
       openTemplateEditor,
       templates,
       events,
@@ -221,6 +326,13 @@ export function AppProvider({ children }) {
       saveEvent,
       deleteEvent,
       duplicateEvent,
+      photoCounts,
+      jobsBridge,
+      recordEventPhoto,
+      refreshEventPhotoCount,
+      downloadEventJob,
+      emailEventJob,
+      clearEventJob,
     ],
   );
 

@@ -7,12 +7,10 @@ import { TemplateEditor } from './TemplateEditor.jsx';
 import { CreateEvent } from './CreateEvent.jsx';
 
 export function AdminApp() {
-  const { adminRoute, adminTheme } = useApp();
+  const { adminRoute } = useApp();
 
   return (
-    <div
-      className={`shell-admin shell-admin--split${adminTheme === 'dark' ? ' theme-dark' : ''}`}
-    >
+    <div className="shell-admin shell-admin--split">
       <AdminShell>
         {adminRoute === 'events' && <EventsDashboard />}
         {adminRoute === 'templates' && <TemplatesPage />}

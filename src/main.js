@@ -1,6 +1,10 @@
-const { app, BrowserWindow, ipcMain } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, shell } = require('electron');
+const fs = require('node:fs');
+const fsp = require('node:fs/promises');
+const path = require('node:path');
+const JSZip = require('jszip');
+const { registerGmailIpc, trySendJobZipViaGmail } = require('./gmail-oauth-main');
 
-// Handle creating/removing shortcuts on Windows when installing/uninstalling.
 if (require('electron-squirrel-startup')) {
   app.quit();
 }
@@ -38,6 +42,240 @@ ipcMain.handle('print-data-url', async (_event, dataUrl) => {
   });
 });
 
+/* ---- Job photo storage (per-event folders under userData/jobs/<eventId>) ---- */
+
+const SAFE_ID_RE = /^[A-Za-z0-9_-]+$/;
+
+function jobsRoot() {
+  return path.join(app.getPath('userData'), 'jobs');
+}
+
+function jobDir(eventId) {
+  if (typeof eventId !== 'string' || !SAFE_ID_RE.test(eventId)) {
+    throw new Error('invalid eventId');
+  }
+  return path.join(jobsRoot(), eventId);
+}
+
+async function ensureJobDir(eventId) {
+  const dir = jobDir(eventId);
+  await fsp.mkdir(dir, { recursive: true });
+  return dir;
+}
+
+function dataUrlToBuffer(dataUrl) {
+  if (typeof dataUrl !== 'string') throw new Error('expected data URL');
+  const m = /^data:([^;,]+)?(?:;[^,]*)?,(.*)$/i.exec(dataUrl);
+  if (!m) throw new Error('malformed data URL');
+  const mime = (m[1] || 'application/octet-stream').toLowerCase();
+  const payload = m[2] || '';
+  const isBase64 = /;base64/i.test(dataUrl.slice(0, dataUrl.indexOf(',')));
+  const buf = isBase64
+    ? Buffer.from(payload, 'base64')
+    : Buffer.from(decodeURIComponent(payload), 'binary');
+  return { buffer: buf, mime };
+}
+
+function extForMime(mime) {
+  if (!mime) return 'jpg';
+  if (mime.includes('png')) return 'png';
+  if (mime.includes('webp')) return 'webp';
+  if (mime.includes('gif')) return 'gif';
+  return 'jpg';
+}
+
+function fileSafeName(s) {
+  return String(s || '').replace(/[\\/:*?"<>|]+/g, '_').trim() || 'job';
+}
+
+ipcMain.handle('job-save-photo', async (_event, payload = {}) => {
+  const { eventId, dataUrl, capturedAt } = payload;
+  if (!eventId) throw new Error('eventId required');
+  if (!dataUrl) throw new Error('dataUrl required');
+  const dir = await ensureJobDir(eventId);
+  const { buffer, mime } = dataUrlToBuffer(dataUrl);
+  const ts = Number.isFinite(capturedAt) ? capturedAt : Date.now();
+  const rand = Math.random().toString(36).slice(2, 8);
+  const filename = `photo-${ts}-${rand}.${extForMime(mime)}`;
+  const filePath = path.join(dir, filename);
+  await fsp.writeFile(filePath, buffer);
+  return { filename, size: buffer.length, capturedAt: ts };
+});
+
+ipcMain.handle('job-list-photos', async (_event, payload = {}) => {
+  const { eventId } = payload;
+  if (!eventId) return { count: 0, files: [] };
+  let entries = [];
+  try {
+    const dir = jobDir(eventId);
+    entries = await fsp.readdir(dir, { withFileTypes: true });
+  } catch {
+    return { count: 0, files: [] };
+  }
+  const files = [];
+  for (const ent of entries) {
+    if (!ent.isFile()) continue;
+    const lower = ent.name.toLowerCase();
+    if (!/\.(jpe?g|png|webp|gif)$/i.test(lower)) continue;
+    try {
+      const stat = await fsp.stat(path.join(jobDir(eventId), ent.name));
+      files.push({ name: ent.name, size: stat.size, modified: stat.mtimeMs });
+    } catch {
+      /* skip unreadable */
+    }
+  }
+  files.sort((a, b) => a.modified - b.modified);
+  return { count: files.length, files };
+});
+
+ipcMain.handle('job-clear-photos', async (_event, payload = {}) => {
+  const { eventId } = payload;
+  if (!eventId) return { removed: 0 };
+  let dir;
+  try {
+    dir = jobDir(eventId);
+  } catch {
+    return { removed: 0 };
+  }
+  let entries = [];
+  try {
+    entries = await fsp.readdir(dir);
+  } catch {
+    return { removed: 0 };
+  }
+  let removed = 0;
+  await Promise.all(
+    entries.map(async (name) => {
+      try {
+        await fsp.unlink(path.join(dir, name));
+        removed += 1;
+      } catch {
+        /* ignore */
+      }
+    }),
+  );
+  return { removed };
+});
+
+async function buildJobZip(eventId) {
+  const dir = jobDir(eventId);
+  let entries = [];
+  try {
+    entries = await fsp.readdir(dir);
+  } catch {
+    return null;
+  }
+  const photos = entries.filter((n) => /\.(jpe?g|png|webp|gif)$/i.test(n));
+  if (photos.length === 0) return null;
+  const zip = new JSZip();
+  for (const name of photos) {
+    try {
+      const buf = await fsp.readFile(path.join(dir, name));
+      zip.file(name, buf);
+    } catch {
+      /* skip unreadable */
+    }
+  }
+  return {
+    count: photos.length,
+    buffer: await zip.generateAsync({
+      type: 'nodebuffer',
+      compression: 'DEFLATE',
+      compressionOptions: { level: 6 },
+    }),
+  };
+}
+
+ipcMain.handle('job-download-zip', async (event, payload = {}) => {
+  const { eventId, eventName } = payload;
+  if (!eventId) throw new Error('eventId required');
+  const built = await buildJobZip(eventId);
+  if (!built) return { ok: false, reason: 'no-photos' };
+  const win = BrowserWindow.fromWebContents(event.sender);
+  const stamp = new Date().toISOString().slice(0, 10);
+  const defaultName = `${fileSafeName(eventName || 'job')}-${stamp}.zip`;
+  const result = await dialog.showSaveDialog(win || undefined, {
+    title: 'Save job archive',
+    defaultPath: defaultName,
+    filters: [{ name: 'Zip archive', extensions: ['zip'] }],
+  });
+  if (result.canceled || !result.filePath) return { ok: false, reason: 'cancelled' };
+  await fsp.writeFile(result.filePath, built.buffer);
+  return { ok: true, path: result.filePath, count: built.count };
+});
+
+ipcMain.handle('job-email-zip', async (event, payload = {}) => {
+  const { eventId, eventName, recipient = '', message = '' } = payload;
+  if (!eventId) throw new Error('eventId required');
+  const built = await buildJobZip(eventId);
+  if (!built) return { ok: false, reason: 'no-photos' };
+
+  const stamp = new Date().toISOString().slice(0, 10);
+  const safeName = fileSafeName(eventName || 'job');
+  const defaultName = `${safeName}-${stamp}.zip`;
+  const trimmedRecipient = String(recipient || '').trim();
+
+  try {
+    const gmailResult = await trySendJobZipViaGmail(app, {
+      recipient: trimmedRecipient,
+      eventName,
+      message,
+      zipBuffer: built.buffer,
+      zipFileName: defaultName,
+    });
+    if (gmailResult?.ok && gmailResult.via === 'gmail') {
+      return { ok: true, via: 'gmail', count: built.count };
+    }
+    if (gmailResult && gmailResult.ok === false && gmailResult.reason === 'attachment-too-large') {
+      return gmailResult;
+    }
+  } catch (e) {
+    return {
+      ok: false,
+      reason: 'gmail-send-failed',
+      detail: String(e && e.message ? e.message : e),
+    };
+  }
+
+  const win = BrowserWindow.fromWebContents(event.sender);
+  const result = await dialog.showSaveDialog(win || undefined, {
+    title: 'Save job archive (then attach to email)',
+    defaultPath: defaultName,
+    filters: [{ name: 'Zip archive', extensions: ['zip'] }],
+  });
+  if (result.canceled || !result.filePath) return { ok: false, reason: 'cancelled' };
+  await fsp.writeFile(result.filePath, built.buffer);
+
+  const subject = `Your photos from ${eventName || 'our event'}`;
+  const bodyLines = [
+    message ? message : `Hi,\n\nYour photos from ${eventName || 'the event'} are attached as a zip file.`,
+    '',
+    `Attachment saved to: ${result.filePath}`,
+    `Photos: ${built.count}`,
+    '',
+    'If your mail client did not auto-attach the file, please attach the zip from the path above before sending.',
+  ];
+  const params = new URLSearchParams({
+    subject,
+    body: bodyLines.join('\n'),
+  });
+  const to = encodeURIComponent(trimmedRecipient);
+  const mailto = `mailto:${to}?${params.toString().replace(/\+/g, '%20')}`;
+
+  try {
+    await shell.openPath(result.filePath); // surface the saved zip in the OS
+  } catch {
+    /* non-fatal */
+  }
+  try {
+    await shell.openExternal(mailto);
+  } catch (e) {
+    return { ok: true, path: result.filePath, count: built.count, mailtoOpened: false };
+  }
+
+  return { ok: true, path: result.filePath, count: built.count, mailtoOpened: true };
+});
+
 const createWindow = () => {
   const mainWindow = new BrowserWindow({
     width: 1440,
@@ -61,14 +299,10 @@ const createWindow = () => {
   });
 };
 
-// This method will be called when Electron has finished
-// initialization and is ready to create browser windows.
-// Some APIs can only be used after this event occurs.
 app.whenReady().then(() => {
+  registerGmailIpc({ app, ipcMain, shell });
   createWindow();
 
-  // On OS X it's common to re-create a window in the app when the
-  // dock icon is clicked and there are no other windows open.
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) {
       createWindow();
@@ -76,14 +310,8 @@ app.whenReady().then(() => {
   });
 });
 
-// Quit when all windows are closed, except on macOS. There, it's common
-// for applications and their menu bar to stay active until the user quits
-// explicitly with Cmd + Q.
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') {
     app.quit();
   }
 });
-
-// In this file you can include the rest of your app's specific main process
-// code. You can also put them in separate files and import them here.

@@ -1,28 +1,26 @@
-import React, { useEffect } from 'react';
+import React from 'react';
 import { QRCodeSVG } from 'qrcode.react';
 
-const AUTO_MS = 12000;
-
 export function QRScreen({ payload, onDone }) {
-  useEffect(() => {
-    const t = setTimeout(onDone, AUTO_MS);
-    return () => clearTimeout(t);
-  }, [onDone]);
-
   return (
     <div className="qr-screen">
-      <p style={{ margin: 0, fontWeight: 700, fontSize: '1.2rem', color: 'var(--ink)' }}>
-        Scan to save
-      </p>
-      <div className="qr-box">
-        <QRCodeSVG value={payload} size={280} level="M" />
+      <div className="qr-screen__inner">
+        <h1 className="qr-screen__title">Scan to save</h1>
+        <p className="qr-screen__subtitle">
+          Point your phone camera at the code, then tap the link to download your photo.
+        </p>
+        <div className="qr-box qr-box--large">
+          <QRCodeSVG value={payload} size={420} level="M" />
+        </div>
+        <button
+          type="button"
+          className="kiosk-tap kiosk-tap--qr-done"
+          onClick={onDone}
+        >
+          <span className="kiosk-tap__shine" aria-hidden />
+          Done
+        </button>
       </div>
-      <p style={{ margin: 0, color: 'var(--ink-muted)', fontSize: '0.9rem' }}>
-        This window will close automatically.
-      </p>
-      <button type="button" className="btn btn-ghost" onClick={onDone}>
-        Done
-      </button>
     </div>
   );
 }

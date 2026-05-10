@@ -90,3 +90,7 @@ typings/
 
 # Electron-Forge
 out/
+
+# Gmail OAuth (do not commit)
+client_secret*.json
+gmail-oauth-tokens.json

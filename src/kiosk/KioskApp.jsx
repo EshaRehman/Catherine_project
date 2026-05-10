@@ -1,26 +1,43 @@
-import React, { useCallback, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useApp } from '../state/AppContext.jsx';
 import { AdminUnlockModal } from './AdminUnlockModal.jsx';
 import { CornerLongPress } from './CornerLongPress.jsx';
 import { IdleScreen } from './IdleScreen.jsx';
 import { TemplateSelectScreen } from './TemplateSelectScreen.jsx';
 import { CameraScreen } from './CameraScreen.jsx';
+import { CapturePreviewScreen } from './CapturePreviewScreen.jsx';
 import { ProcessingScreen } from './ProcessingScreen.jsx';
 import { ResultScreen } from './ResultScreen.jsx';
 import { QRScreen } from './QRScreen.jsx';
 
+const CAPTURE_PREVIEW_MS = 900;
+
 export function KioskApp() {
-  const { templates, events, settings } = useApp();
+  const { templates, events, settings, recordEventPhoto } = useApp();
   const [phase, setPhase] = useState('idle');
   const [selectedTemplateId, setSelectedTemplateId] = useState(null);
   const [subjectDataUrl, setSubjectDataUrl] = useState(null);
   const [resultDataUrl, setResultDataUrl] = useState(null);
   const [adminModal, setAdminModal] = useState(false);
+  const savedKeyRef = useRef('');
 
   const activeEvent = useMemo(
     () => events.find((e) => e.id === settings.activeEventId) || null,
     [events, settings.activeEventId],
   );
+
+  /* Persist each finished result to the active event's job folder exactly once. */
+  useEffect(() => {
+    if (phase !== 'result' || !resultDataUrl || !activeEvent) return;
+    const key = `${activeEvent.id}::${resultDataUrl.length}::${resultDataUrl.slice(-32)}`;
+    if (savedKeyRef.current === key) return;
+    savedKeyRef.current = key;
+    recordEventPhoto({
+      eventId: activeEvent.id,
+      dataUrl: resultDataUrl,
+      capturedAt: Date.now(),
+    });
+  }, [phase, resultDataUrl, activeEvent, recordEventPhoto]);
 
   const kioskTemplates = useMemo(() => {
     const ids = activeEvent?.templateIds;
@@ -33,7 +50,11 @@ export function KioskApp() {
     [kioskTemplates, selectedTemplateId],
   );
 
-  const countdownSec = activeEvent?.countdownSec ?? 3;
+  useEffect(() => {
+    if (phase !== 'captured' || !subjectDataUrl) return undefined;
+    const id = setTimeout(() => setPhase('processing'), CAPTURE_PREVIEW_MS);
+    return () => clearTimeout(id);
+  }, [phase, subjectDataUrl]);
 
   const goStart = useCallback(() => {
     if (kioskTemplates.length === 0) return;
@@ -73,10 +94,9 @@ export function KioskApp() {
 
       {phase === 'camera' && selectedTemplate && (
         <CameraScreen
-          countdownSec={countdownSec}
           onCapture={(dataUrl) => {
             setSubjectDataUrl(dataUrl);
-            setPhase('processing');
+            setPhase('captured');
           }}
           onBack={() => {
             if (kioskTemplates.length === 1) resetFlow();
@@ -86,6 +106,10 @@ export function KioskApp() {
             }
           }}
         />
+      )}
+
+      {phase === 'captured' && subjectDataUrl && (
+        <CapturePreviewScreen subjectDataUrl={subjectDataUrl} />
       )}
 
       {phase === 'processing' && selectedTemplate && subjectDataUrl && (
@@ -101,6 +125,7 @@ export function KioskApp() {
 
       {phase === 'result' && resultDataUrl && selectedTemplate && (
         <ResultScreen
+          imageDataUrl={resultDataUrl}
           template={selectedTemplate}
           onQR={() => setPhase('qr')}
           onRegenerate={() => {

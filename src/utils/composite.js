@@ -152,7 +152,7 @@ export async function compositePortrait({
   subjectDataUrl,
   template,
   width = 1080,
-  height = 1920,
+  height = 1350,
 }) {
   const canvas = document.createElement('canvas');
   canvas.width = width;

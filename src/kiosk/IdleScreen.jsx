@@ -1,30 +1,37 @@
-import React from 'react';
+import React, { useRef, useEffect } from 'react';
+import idleHeroVideo from './idleHeroMedia.js';
 
 export function IdleScreen({ onStart, disabled }) {
-  return (
-    <div className="kiosk-idle kiosk-idle--rich">
-      <div className="kiosk-idle__blobs" aria-hidden>
-        <span className="kiosk-idle__blob kiosk-idle__blob--a" />
-        <span className="kiosk-idle__blob kiosk-idle__blob--b" />
-        <span className="kiosk-idle__blob kiosk-idle__blob--c" />
-      </div>
-      <div className="kiosk-idle__grain" aria-hidden />
+  const videoRef = useRef(null);
 
-      <div className="kiosk-idle__content">
-        <h1 className="kiosk-idle__title">Your portrait awaits</h1>
-        <p className="kiosk-idle__sub">
-          {disabled
-            ? 'No looks are available for the live experience yet.'
-            : 'One tap to begin.'}
-        </p>
+  useEffect(() => {
+    const el = videoRef.current;
+    if (!el) return;
+    el.muted = true;
+    const p = el.play();
+    if (p && typeof p.catch === 'function') p.catch(() => {});
+  }, []);
+
+  return (
+    <div className="kiosk-idle kiosk-idle--video">
+      <video
+        ref={videoRef}
+        className="kiosk-idle__video kiosk-idle__video--fullscreen"
+        src={idleHeroVideo}
+        autoPlay
+        muted
+        loop
+        playsInline
+        aria-hidden
+      />
+      <div className="kiosk-idle__footer">
         {disabled ? (
           <p className="kiosk-idle__hint">
             In admin, add templates to an event and set that event as active — then return with{' '}
             <strong>Live experience</strong>.
           </p>
         ) : null}
-        <div className="kiosk-idle__rule" aria-hidden />
-        <button type="button" className="kiosk-tap" onClick={onStart} disabled={disabled}>
+        <button type="button" className="kiosk-tap kiosk-tap--idle-bottom" onClick={onStart} disabled={disabled}>
           <span className="kiosk-tap__shine" aria-hidden />
           Tap to start
         </button>

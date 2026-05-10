@@ -32,4 +32,8 @@ module.exports = [
     test: /\.(png|jpe?g|gif|webp|svg)$/i,
     type: 'asset/resource',
   },
+  {
+    test: /\.(mp4|m4v|webm|mov)$/i,
+    type: 'asset/resource',
+  },
 ];

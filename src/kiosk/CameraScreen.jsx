@@ -1,13 +1,16 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 
-export function CameraScreen({ countdownSec, onCapture, onBack }) {
+const COUNTDOWN_FROM = 3;
+const COUNTDOWN_STEP_MS = 1000;
+
+export function CameraScreen({ onCapture, onBack }) {
   const videoRef = useRef(null);
   const canvasRef = useRef(null);
   const streamRef = useRef(null);
-  const countTimerRef = useRef(null);
   const previewStartedRef = useRef(false);
+  const countdownRunRef = useRef(0);
   const [error, setError] = useState(null);
-  const [count, setCount] = useState(null);
+  const [count, setCount] = useState(0);
   const [streamReady, setStreamReady] = useState(false);
 
   useEffect(() => {
@@ -15,7 +18,12 @@ export function CameraScreen({ countdownSec, onCapture, onBack }) {
     (async () => {
       try {
         const stream = await navigator.mediaDevices.getUserMedia({
-          video: { facingMode: 'user', width: { ideal: 1920 }, height: { ideal: 1080 } },
+          video: {
+            facingMode: 'user',
+            width: { ideal: 1080 },
+            height: { ideal: 1350 },
+            aspectRatio: { ideal: 1080 / 1350 },
+          },
           audio: false,
         });
         if (cancelled) {
@@ -41,8 +49,6 @@ export function CameraScreen({ countdownSec, onCapture, onBack }) {
     };
   }, []);
 
-  // Never show raw <video> — Chromium/Electron paints grey + camera icon on the element surface.
-  // Keep video hidden and mirror frames to a canvas (black until frames arrive).
   useEffect(() => {
     let cancelled = false;
     let rafId = 0;
@@ -77,46 +83,51 @@ export function CameraScreen({ countdownSec, onCapture, onBack }) {
     };
   }, []);
 
-  useEffect(
-    () => () => {
-      if (countTimerRef.current) clearInterval(countTimerRef.current);
-    },
-    [],
-  );
-
   const snap = useCallback(() => {
     const video = videoRef.current;
     if (!video || !video.videoWidth || !streamReady) return;
+    const vw = video.videoWidth;
+    const vh = video.videoHeight;
+    const outW = 1080;
+    const outH = 1350;
     const canvas = document.createElement('canvas');
-    canvas.width = video.videoWidth;
-    canvas.height = video.videoHeight;
+    canvas.width = outW;
+    canvas.height = outH;
     const ctx = canvas.getContext('2d', { alpha: false });
     ctx.fillStyle = '#000';
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-    ctx.drawImage(video, 0, 0);
+    ctx.fillRect(0, 0, outW, outH);
+    const scale = Math.max(outW / vw, outH / vh);
+    const dw = vw * scale;
+    const dh = vh * scale;
+    const dx = (outW - dw) / 2;
+    const dy = (outH - dh) / 2;
+    ctx.drawImage(video, 0, 0, vw, vh, dx, dy, dw, dh);
     const dataUrl = canvas.toDataURL('image/jpeg', 0.92);
     streamRef.current?.getTracks().forEach((tr) => tr.stop());
     streamRef.current = null;
     onCapture(dataUrl);
   }, [onCapture, streamReady]);
 
-  const runCountdown = useCallback(() => {
-    if (countTimerRef.current) clearInterval(countTimerRef.current);
-    let n = countdownSec;
-    setCount(n);
-    const id = setInterval(() => {
-      n -= 1;
-      if (n <= 0) {
-        clearInterval(id);
-        countTimerRef.current = null;
-        setCount(null);
-        snap();
+  useEffect(() => {
+    if (count <= 0) return undefined;
+    const myId = countdownRunRef.current;
+    const id = setTimeout(() => {
+      if (myId !== countdownRunRef.current) return;
+      if (count > 1) {
+        setCount(count - 1);
       } else {
-        setCount(n);
+        setCount(0);
+        snap();
       }
-    }, 1000);
-    countTimerRef.current = id;
-  }, [countdownSec, snap]);
+    }, COUNTDOWN_STEP_MS);
+    return () => clearTimeout(id);
+  }, [count, snap]);
+
+  const startCountdown = useCallback(() => {
+    if (!streamReady || count > 0) return;
+    countdownRunRef.current += 1;
+    setCount(COUNTDOWN_FROM);
+  }, [streamReady, count]);
 
   if (error === 'camera') {
     return (
@@ -154,15 +165,37 @@ export function CameraScreen({ countdownSec, onCapture, onBack }) {
               />
               <canvas ref={canvasRef} className="camera-wrap__preview" aria-hidden />
               <div className="camera-frame-hint" aria-hidden />
+              {count > 0 ? (
+                <div className="camera-countdown" aria-live="polite" aria-atomic="true">
+                  <div key={count} className="camera-countdown__sparkles" aria-hidden>
+                    {[1, 2, 3, 4, 5, 6].map((n) => (
+                      <svg
+                        key={n}
+                        className={`camera-countdown__sparkle camera-countdown__sparkle--s${n}`}
+                        viewBox="0 0 24 24"
+                        aria-hidden
+                      >
+                        <path
+                          d="M12 0 L13.6 9.4 L24 12 L13.6 14.6 L12 24 L10.4 14.6 L0 12 L10.4 9.4 Z"
+                          fill="currentColor"
+                        />
+                      </svg>
+                    ))}
+                  </div>
+                  <span key={`d${count}`} className="camera-countdown__digit">
+                    {count}
+                  </span>
+                </div>
+              ) : null}
               <div className="camera-wrap__controls">
                 <button
                   type="button"
-                  className={`camera-shutter${count !== null ? ' camera-shutter--counting' : ''}`}
-                  onClick={runCountdown}
-                  disabled={count !== null || !streamReady}
+                  className={`camera-shutter${count > 0 ? ' camera-shutter--counting' : ''}`}
+                  onClick={startCountdown}
+                  disabled={count > 0 || !streamReady}
                   aria-label={
-                    count !== null
-                      ? 'Hold still, capturing'
+                    count > 0
+                      ? 'Countdown in progress'
                       : streamReady
                         ? 'Capture photo'
                         : 'Camera starting'
@@ -172,14 +205,9 @@ export function CameraScreen({ countdownSec, onCapture, onBack }) {
                   <span className="camera-shutter__disc" aria-hidden />
                 </button>
                 <p className="camera-shutter__status" aria-live="polite">
-                  {count !== null ? 'Hold still…' : !streamReady ? 'Starting camera…' : ''}
+                  {count > 0 ? 'Hold still…' : !streamReady ? 'Starting camera…' : ''}
                 </p>
               </div>
-              {count !== null ? (
-                <div className="countdown-overlay">
-                  <span className="countdown-overlay__num">{count}</span>
-                </div>
-              ) : null}
             </div>
           </div>
         </div>

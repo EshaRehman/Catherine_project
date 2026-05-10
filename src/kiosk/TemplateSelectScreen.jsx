@@ -1,8 +1,21 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { TemplateThemePreview } from '../components/TemplateThemePreview.jsx';
-import { getTemplateTagline } from '../constants/templateTaglines.js';
 
 export function TemplateSelectScreen({ templates, onPick, onBack }) {
+  const [selectedId, setSelectedId] = useState(() => templates[0]?.id ?? null);
+
+  useEffect(() => {
+    setSelectedId((prev) => {
+      if (!templates.length) return null;
+      if (prev && templates.some((t) => t.id === prev)) return prev;
+      return templates[0].id;
+    });
+  }, [templates]);
+
+  const handleContinue = () => {
+    if (selectedId) onPick(selectedId);
+  };
+
   return (
     <div className="kiosk-templates kiosk-templates--stage">
       <header className="kiosk-stage-header">
@@ -14,18 +27,19 @@ export function TemplateSelectScreen({ templates, onPick, onBack }) {
       <div className="kiosk-templates__body">
         <div className="kiosk-templates__center">
           <div className="kiosk-templates__center-inner">
-            <p className="kiosk-templates__hint">
-              <span className="kiosk-templates__hint-line" aria-hidden />
-              Choose the world behind your portrait.
-            </p>
+            <h1 className="kiosk-templates__headline" aria-label="Choose a look">
+              <span className="kiosk-templates__headline-choose">CHOOSE</span>{' '}
+              <span className="kiosk-templates__headline-look">A LOOK</span>
+            </h1>
             <div className="kiosk-templates-grid kiosk-templates-grid--themes kiosk-templates-grid--themes-row">
               {templates.map((t) => (
                 <button
                   key={t.id}
                   type="button"
-                  className="kiosk-tpl-card kiosk-tpl-card--hover-select"
+                  className={`kiosk-tpl-card kiosk-tpl-card--hover-select${selectedId === t.id ? ' is-selected' : ''}`}
                   aria-label={`Select ${t.name}`}
-                  onClick={() => onPick(t.id)}
+                  aria-pressed={selectedId === t.id}
+                  onClick={() => setSelectedId(t.id)}
                 >
                   <div className="kiosk-tpl-card__visual">
                     <TemplateThemePreview template={t} variant="kiosk" />
@@ -33,14 +47,22 @@ export function TemplateSelectScreen({ templates, onPick, onBack }) {
                       <span className="kiosk-tpl-card__select-label">Select</span>
                     </div>
                   </div>
-                  <div className="kiosk-tpl-footer">
+                  <div className="kiosk-tpl-footer kiosk-tpl-footer--title-only">
                     <div className="kiosk-tpl-title">{t.name}</div>
-                    {getTemplateTagline(t.previewClass) ? (
-                      <div className="kiosk-tpl-tagline">{getTemplateTagline(t.previewClass)}</div>
-                    ) : null}
                   </div>
                 </button>
               ))}
+            </div>
+            <div className="kiosk-templates__actions">
+              <button
+                type="button"
+                className="kiosk-tap kiosk-tap--continue"
+                onClick={handleContinue}
+                disabled={!selectedId}
+              >
+                <span className="kiosk-tap__shine" aria-hidden />
+                Continue
+              </button>
             </div>
           </div>
         </div>
