@@ -2,6 +2,9 @@ const { contextBridge, ipcRenderer } = require('electron');
 
 contextBridge.exposeInMainWorld('catherine', {
   printDataUrl: (dataUrl) => ipcRenderer.invoke('print-data-url', dataUrl),
+  api: {
+    request: (method, url, payload) => ipcRenderer.invoke('api-request', { method, url, payload }),
+  },
   gmail: {
     getStatus: () => ipcRenderer.invoke('gmail-auth-status'),
     connect: () => ipcRenderer.invoke('gmail-auth-connect'),

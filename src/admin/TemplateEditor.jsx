@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useApp } from '../state/AppContext.jsx';
 import { compositePreviewMock } from '../utils/composite.js';
+import { createTemplate, updateTemplate, getTemplateById } from '../utils/api.js';
 
 const FONTS = [
   { label: 'DM Sans', value: "'DM Sans', system-ui, sans-serif" },
@@ -156,11 +157,23 @@ function PositionMiniPad({ title, marker, x, y, onPlace }) {
   );
 }
 
+const PEOPLE_OPTIONS = [
+  { value: 1, label: '1 Person' },
+  { value: 2, label: '2 People' },
+  { value: 3, label: '3 People' },
+  { value: 4, label: '4 People' },
+  { value: 5, label: '5 People' },
+];
+
+const BASE_PROMPT_MAX = 1000;
+const PEOPLE_PROMPT_MAX = 1000;
+
+const defaultPeoplePrompts = () => ({ 1: '', 2: '', 3: '', 4: '', 5: '' });
+
 export function TemplateEditor() {
   const {
     editorTemplateId,
-    getTemplate,
-    saveTemplate,
+    editorIsNew,
     setAdminRoute,
     createDefaultTemplate,
   } = useApp();
@@ -168,21 +181,51 @@ export function TemplateEditor() {
   const [draft, setDraft] = useState(() => createDefaultTemplate());
   const [previewUrl, setPreviewUrl] = useState(null);
   const [generating, setGenerating] = useState(false);
+  const [basePrompt, setBasePrompt] = useState('');
+  const [numberOfPeople, setNumberOfPeople] = useState(1);
+  const [peoplePrompts, setPeoplePrompts] = useState(defaultPeoplePrompts);
+  const [saveStatus, setSaveStatus] = useState(null); // null | 'saving' | 'error'
+  const [saveError, setSaveError] = useState('');
+  const [loading, setLoading] = useState(false);
   const stageRef = useRef(null);
   const dragRef = useRef(null);
 
+  const updatePeoplePrompt = (count, value) => {
+    setPeoplePrompts((prev) => ({ ...prev, [count]: value }));
+  };
+
   useEffect(() => {
-    const t = editorTemplateId ? getTemplate(editorTemplateId) : null;
-    if (t) {
-      const copy = JSON.parse(JSON.stringify(t));
-      copy.steps = Math.min(20, Math.max(0, Number(copy.steps) || 6));
-      copy.fontSize = normalizeFontSizePx(copy.fontSize);
-      const lp = Math.round(Number(copy.logoScale || 0.22) * 100);
-      copy.logoScale = Math.min(45, Math.max(8, lp)) / 100;
-      setDraft(copy);
-    } else setDraft(createDefaultTemplate());
-    setPreviewUrl(null);
-  }, [editorTemplateId]);
+    const loadData = async () => {
+      setPreviewUrl(null);
+      if (editorTemplateId && !editorIsNew) {
+        setLoading(true);
+        const res = await getTemplateById(editorTemplateId);
+        if (res.ok && res.data) {
+          const t = res.data;
+          const copy = JSON.parse(JSON.stringify(t));
+          copy.id = copy.templateId || copy.id;
+          copy.steps = Math.min(20, Math.max(0, Number(copy.steps) || 6));
+          copy.fontSize = normalizeFontSizePx(copy.fontSize);
+          const lp = Math.round(Number(copy.logoScale || 0.22) * 100);
+          copy.logoScale = Math.min(45, Math.max(8, lp)) / 100;
+          
+          setDraft(copy);
+          setBasePrompt(t.basePrompt || '');
+          if (t.peoplePrompts) {
+             setPeoplePrompts({...defaultPeoplePrompts(), ...t.peoplePrompts});
+          }
+        } else {
+           // Handle error finding it
+           setDraft(createDefaultTemplate());
+        }
+        setLoading(false);
+      } else {
+        setDraft(createDefaultTemplate());
+      }
+    };
+    
+    loadData();
+  }, [editorTemplateId, editorIsNew]);
 
   const readFileDataUrl = (file) =>
     new Promise((resolve, reject) => {
@@ -263,8 +306,54 @@ export function TemplateEditor() {
     };
   }, [pctFromEvent, draft.logoX, draft.logoY]);
 
-  const save = (asNew) => {
-    saveTemplate(draft, { asNew });
+  const save = async (asNew) => {
+    setSaveStatus('saving');
+    setSaveError('');
+
+    // Build the API payload
+    const payload = {
+      name: draft.name || 'Untitled',
+      basePrompt,
+      peoplePrompts: {
+        1: peoplePrompts[1] || '',
+        2: peoplePrompts[2] || '',
+        3: peoplePrompts[3] || '',
+        4: peoplePrompts[4] || '',
+        5: peoplePrompts[5] || '',
+      },
+      overlayText: draft.overlayText || '',
+      fontFamily: draft.fontFamily || '',
+      fontSize: draft.fontSize || 42,
+      textColor: draft.textColor || '#ffffff',
+      textPosition: {
+        x: Math.round(draft.textX ?? 50),
+        y: Math.round(draft.textY ?? 50),
+      },
+      logoUrl: draft.logoUrl || '',
+      logoScale: draft.logoScale ?? 0.08,
+      logoLocked: false,
+      logoPosition: {
+        x: Math.round(draft.logoX ?? 50),
+        y: Math.round(draft.logoY ?? 50),
+      },
+    };
+
+    let result;
+    // Check if it's an update vs create
+    // If not saving as new and we have an editorTemplateId that is not an object (meaning it's from DB)
+    if (!asNew && editorTemplateId && !editorIsNew) {
+       result = await updateTemplate(editorTemplateId, payload);
+    } else {
+       result = await createTemplate(payload);
+    }
+
+    if (!result.ok) {
+      setSaveStatus('error');
+      setSaveError(result.error || 'Failed to save template.');
+      return;
+    }
+
+    setSaveStatus(null);
     setAdminRoute('templates');
   };
 
@@ -274,28 +363,34 @@ export function TemplateEditor() {
 
   const min = draft.previewClass || 'tpl-preview--thrones';
 
+
   return (
     <div className="template-editor-page">
       <div className="admin-page-head template-editor-page__head">
         <div className="admin-page-head__titles">
-          <h1 className="admin-page-title">Template editor</h1>
+          <h1 className="admin-page-title">{editorIsNew ? 'Create template' : 'Edit template'}</h1>
           <p className="admin-page-sub">Adjust the look; the live app stays visual-only.</p>
         </div>
         <div className="template-editor-page__actions">
-          <button type="button" className="btn btn-ghost" onClick={() => setAdminRoute('templates')}>
+          <button type="button" className="btn btn-ghost" onClick={() => setAdminRoute('templates')} disabled={saveStatus === 'saving'}>
             Back
           </button>
-          <button type="button" className="btn btn-primary" onClick={() => save(false)}>
-            Save
-          </button>
-          <button type="button" className="btn btn-ghost" onClick={() => save(true)}>
-            Save as new
+          <button type="button" className="btn btn-primary" onClick={() => save(false)} disabled={saveStatus === 'saving' || loading}>
+            {saveStatus === 'saving' ? 'Saving…' : 'Save'}
           </button>
         </div>
+        {saveStatus === 'error' && (
+          <p className="template-save-error" role="alert">
+            ⚠️ {saveError}
+          </p>
+        )}
       </div>
 
-      <div className="editor-split template-editor-page__split">
-        <div className="preview-stage-wrap preview-stage-wrap--editor">
+      {loading ? (
+        <div style={{ padding: '20px' }}>Loading template...</div>
+      ) : (
+        <div className="editor-split template-editor-page__split">
+          <div className="preview-stage-wrap preview-stage-wrap--editor">
           <div ref={stageRef} className="preview-stage preview-stage--compact" style={{ position: 'relative' }}>
             {previewUrl ? (
               <img src={previewUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
@@ -373,46 +468,133 @@ export function TemplateEditor() {
         </div>
 
         <div className="editor-scroll panel template-editor-page__form template-editor-form">
-          <section className="editor-card">
-            <h2 className="editor-card__title">Generation Settings</h2>
-            <div className="editor-card__grid">
-              <div className="field">
-                <label htmlFor="tn">Template name</label>
-                <input
-                  id="tn"
-                  className="input"
-                  value={draft.name}
-                  onChange={(e) => setDraft({ ...draft, name: e.target.value })}
-                />
-              </div>
-              <FileUploadRow
-                id="tpl-bg"
-                title="Background image"
-                cta="+ Upload Background"
-                subtitle="Drag & drop or click to upload"
-                onChange={onBgFile}
-              />
-              <div className="field field--full">
-                <label htmlFor="pr">Prompt</label>
-                <textarea
-                  id="pr"
-                  className="textarea textarea--compact"
-                  rows={3}
-                  value={draft.prompt}
-                  onChange={(e) => setDraft({ ...draft, prompt: e.target.value })}
-                />
-              </div>
-              <SliderWithInput
-                id="steps"
-                label="Steps (Generation quality)"
-                value={draft.steps}
-                min={0}
-                max={20}
-                onChange={(value) => setDraft({ ...draft, steps: value })}
-                hint="Higher values can improve quality but take longer."
+          <section className="editor-card gen-settings-card">
+            <div className="gen-settings-header">
+              <h2 className="gen-settings-title">Generation Settings</h2>
+              <p className="gen-settings-sub">Create your base prompt and generate prompts for 1 to 5 people.</p>
+            </div>
+
+            <div className="field gen-settings-name-field">
+              <label htmlFor="tn">Template name</label>
+              <input
+                id="tn"
+                className="input"
+                value={draft.name}
+                onChange={(e) => setDraft({ ...draft, name: e.target.value })}
+                placeholder="Untitled"
               />
             </div>
+
+            {/* Base Prompt sub-card */}
+            <div className="gen-sub-card">
+              <div className="gen-sub-card__header">
+                <span className="gen-sub-card__icon" aria-hidden>
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                    <polyline points="14 2 14 8 20 8" />
+                    <line x1="16" y1="13" x2="8" y2="13" />
+                    <line x1="16" y1="17" x2="8" y2="17" />
+                    <polyline points="10 9 9 9 8 9" />
+                  </svg>
+                </span>
+                <div>
+                  <div className="gen-sub-card__title">Base Prompt</div>
+                  <div className="gen-sub-card__desc">Enter the base prompt that will be used as a scene and outfit description for the generated image.</div>
+                </div>
+              </div>
+              <div className="gen-sub-card__body">
+                <textarea
+                  id="base-prompt"
+                  className="textarea gen-sub-card__textarea"
+                  rows={4}
+                  maxLength={BASE_PROMPT_MAX}
+                  value={basePrompt}
+                  onChange={(e) => setBasePrompt(e.target.value)}
+                  placeholder="Enter your base prompt here..."
+                />
+                <div className="gen-sub-card__counter">{basePrompt.length}/{BASE_PROMPT_MAX}</div>
+              </div>
+            </div>
+
+            {/* Number of People sub-card */}
+            <div className="gen-sub-card">
+              <div className="gen-sub-card__header">
+                <span className="gen-sub-card__icon" aria-hidden>
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+                    <circle cx="9" cy="7" r="4" />
+                    <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
+                    <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+                  </svg>
+                </span>
+                <div>
+                  <div className="gen-sub-card__title">Number of People</div>
+                  <div className="gen-sub-card__desc">Write a description for each person in the image.</div>
+                </div>
+              </div>
+              <div className="gen-sub-card__body">
+                <select
+                  id="num-people"
+                  className="select gen-sub-card__select"
+                  value={numberOfPeople}
+                  onChange={(e) => setNumberOfPeople(Number(e.target.value))}
+                >
+                  {PEOPLE_OPTIONS.map((o) => (
+                    <option key={o.value} value={o.value}>{o.label}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            {/* Generated Prompt sub-card — editable per person count */}
+            <div className="gen-sub-card">
+              <div className="gen-sub-card__header">
+                <span className="gen-sub-card__icon" aria-hidden>
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M12 2L2 7l10 5 10-5-10-5z" />
+                    <path d="M2 17l10 5 10-5" />
+                    <path d="M2 12l10 5 10-5" />
+                  </svg>
+                </span>
+                <div>
+                  <div className="gen-sub-card__title">Generated Prompt</div>
+                  <div className="gen-sub-card__desc">
+                    Write the prompt for{' '}
+                    <strong>{PEOPLE_OPTIONS.find((o) => o.value === numberOfPeople)?.label}</strong>.
+                    Switch the dropdown above to edit a different count.
+                  </div>
+                </div>
+              </div>
+              <div className="gen-sub-card__body">
+                <textarea
+                  id="generated-prompt"
+                  className="textarea gen-sub-card__textarea"
+                  rows={4}
+                  maxLength={PEOPLE_PROMPT_MAX}
+                  value={peoplePrompts[numberOfPeople]}
+                  onChange={(e) => updatePeoplePrompt(numberOfPeople, e.target.value)}
+                  placeholder={`Enter prompt for ${PEOPLE_OPTIONS.find((o) => o.value === numberOfPeople)?.label.toLowerCase()}...`}
+                />
+                <div className="gen-sub-card__counter gen-sub-card__counter--row">
+                  <span className="gen-sub-card__filled-pills">
+                    {PEOPLE_OPTIONS.map((o) => (
+                      <span
+                        key={o.value}
+                        className={`gen-pill ${o.value === numberOfPeople ? 'gen-pill--active' : ''
+                          } ${peoplePrompts[o.value].trim() ? 'gen-pill--filled' : ''}`}
+                        onClick={() => setNumberOfPeople(o.value)}
+                        title={o.label}
+                      >
+                        {o.value}
+                      </span>
+                    ))}
+                  </span>
+                  <span>{peoplePrompts[numberOfPeople].length}/{PEOPLE_PROMPT_MAX}</span>
+                </div>
+              </div>
+            </div>
           </section>
+
 
           <section className="editor-card">
             <h2 className="editor-card__title">Text Overlay</h2>
@@ -525,6 +707,7 @@ export function TemplateEditor() {
           </section>
         </div>
       </div>
+      )}
     </div>
   );
 }

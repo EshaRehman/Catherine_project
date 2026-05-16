@@ -2,6 +2,8 @@ const { app, BrowserWindow, ipcMain, dialog, shell } = require('electron');
 const fs = require('node:fs');
 const fsp = require('node:fs/promises');
 const path = require('node:path');
+const http = require('node:http');
+const https = require('node:https');
 const JSZip = require('jszip');
 const { registerGmailIpc, trySendJobZipViaGmail } = require('./gmail-oauth-main');
 
@@ -40,6 +42,42 @@ ipcMain.handle('print-data-url', async (_event, dataUrl) => {
       }, 250);
     });
   });
+});
+
+/* ---- Generic HTTP proxy (avoids CORS in renderer) ---- */
+
+function httpRequest(method, url, body) {
+  return new Promise((resolve, reject) => {
+    const parsed = new URL(url);
+    const isHttps = parsed.protocol === 'https:';
+    const transport = isHttps ? https : http;
+    const bodyStr = body !== undefined ? JSON.stringify(body) : null;
+    const options = {
+      hostname: parsed.hostname,
+      port: parsed.port || (isHttps ? 443 : 80),
+      path: parsed.pathname + parsed.search,
+      method: method.toUpperCase(),
+      headers: {
+        'Content-Type': 'application/json',
+        ...(bodyStr ? { 'Content-Length': Buffer.byteLength(bodyStr) } : {}),
+      },
+    };
+    const req = transport.request(options, (res) => {
+      let data = '';
+      res.on('data', (chunk) => { data += chunk; });
+      res.on('end', () => {
+        try { resolve({ status: res.statusCode, body: JSON.parse(data) }); }
+        catch { resolve({ status: res.statusCode, body: data }); }
+      });
+    });
+    req.on('error', reject);
+    if (bodyStr) req.write(bodyStr);
+    req.end();
+  });
+}
+
+ipcMain.handle('api-request', async (_event, { method, url, payload }) => {
+  return httpRequest(method, url, payload);
 });
 
 /* ---- Job photo storage (per-event folders under userData/jobs/<eventId>) ---- */
