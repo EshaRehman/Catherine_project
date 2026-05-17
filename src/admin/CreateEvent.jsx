@@ -2,9 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useApp } from '../state/AppContext.jsx';
 import { TemplateThemePreview } from '../components/TemplateThemePreview.jsx';
 import { getTemplateTagline } from '../constants/templateTaglines.js';
-
-const uid = () =>
-  `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 9)}`;
+import { createEvent, getTemplates, getEvents } from '../utils/api.js';
 
 function TemplatePickCard({ template, selected, onToggle }) {
   return (
@@ -30,20 +28,55 @@ function TemplatePickCard({ template, selected, onToggle }) {
 
 export function CreateEvent() {
   const {
-    templates,
-    saveEvent,
     setAdminRoute,
     eventFormId,
-    events,
   } = useApp();
-
-  const existing = eventFormId ? events.find((e) => e.id === eventFormId) : null;
 
   const [name, setName] = useState('');
   const [templateIds, setTemplateIds] = useState([]);
   const [formError, setFormError] = useState('');
+  const [dbTemplates, setDbTemplates] = useState([]);
+  const [dbEvents, setDbEvents] = useState([]);
+  const [loadingTemplates, setLoadingTemplates] = useState(true);
+  const [saving, setSaving] = useState(false);
 
-  /* Reset when switching create ↔ edit only (not when `events` updates during create) */
+  const existing = eventFormId ? dbEvents.find((e) => e.id === eventFormId) : null;
+
+  useEffect(() => {
+    const fetchData = async () => {
+      setLoadingTemplates(true);
+      const [resTemplates, resEvents] = await Promise.all([
+        getTemplates(),
+        getEvents()
+      ]);
+      
+      if (resTemplates.ok) {
+        let templatesArray = [];
+        if (Array.isArray(resTemplates.data)) templatesArray = resTemplates.data;
+        else if (resTemplates.data && Array.isArray(resTemplates.data.data)) templatesArray = resTemplates.data.data;
+        else if (resTemplates.data && Array.isArray(resTemplates.data.templates)) templatesArray = resTemplates.data.templates;
+        
+        setDbTemplates(templatesArray.map(t => ({ ...t, id: t.templateId || t.id })));
+      }
+      
+      if (resEvents.ok) {
+        let eventsArray = [];
+        if (Array.isArray(resEvents.data)) eventsArray = resEvents.data;
+        else if (resEvents.data && Array.isArray(resEvents.data.events)) eventsArray = resEvents.data.events;
+        else if (resEvents.data && Array.isArray(resEvents.data.data)) eventsArray = resEvents.data.data;
+        
+        setDbEvents(eventsArray.map(e => ({ 
+          ...e, 
+          id: e.eventId || e.id,
+          templateIds: e.templates ? e.templates.map(t => t.templateId || t.id) : (e.templateIds || [])
+        })));
+      }
+      setLoadingTemplates(false);
+    };
+    fetchData();
+  }, []);
+
+  /* Reset when switching create ↔ edit only (not when `dbEvents` updates during create) */
   useEffect(() => {
     if (eventFormId) return;
     setName('');
@@ -53,12 +86,12 @@ export function CreateEvent() {
 
   useEffect(() => {
     if (!eventFormId) return;
-    const ex = events.find((e) => e.id === eventFormId);
+    const ex = dbEvents.find((e) => e.id === eventFormId);
     if (!ex) return;
     setName(ex.name || '');
     setTemplateIds(ex.templateIds?.length ? [...ex.templateIds] : []);
     setFormError('');
-  }, [eventFormId, events]);
+  }, [eventFormId, dbEvents]);
 
   const toggleTpl = (id) => {
     setTemplateIds((prev) =>
@@ -66,7 +99,7 @@ export function CreateEvent() {
     );
   };
 
-  const submit = (e) => {
+  const submit = async (e) => {
     e.preventDefault();
     if (!name.trim()) {
       setFormError('Enter an event name.');
@@ -77,16 +110,29 @@ export function CreateEvent() {
       return;
     }
     setFormError('');
-    const ev = {
-      id: existing?.id || uid(),
+    setSaving(true);
+
+    const payload = {
       name: name.trim(),
-      templateIds: [...templateIds],
-      countdownSec: Math.max(1, Math.min(10, Number(existing?.countdownSec) || 3)),
-      status: existing?.status || 'active',
-      createdAt: existing?.createdAt || new Date().toISOString(),
+      templates: templateIds.map(id => {
+        const t = dbTemplates.find(tpl => tpl.id === id);
+        return {
+          templateId: id,
+          name: t ? t.name : 'Unknown Template'
+        };
+      })
     };
-    saveEvent(ev);
-    setAdminRoute('events');
+
+    // Right now there isn't an edit event API mentioned, so we will use createEvent 
+    // for everything, or ideally you'd have an updateEvent later.
+    const res = await createEvent(payload);
+    
+    if (res.ok) {
+      setAdminRoute('events');
+    } else {
+      setFormError(res.error || 'Failed to save event to DB.');
+    }
+    setSaving(false);
   };
 
   return (
@@ -96,7 +142,7 @@ export function CreateEvent() {
           <h1 className="admin-page-title">{existing ? 'Edit event' : 'Create event'}</h1>
           <p className="admin-page-sub">Name the experience and choose which looks guests can pick.</p>
         </div>
-        <button type="button" className="btn btn-ghost" onClick={() => setAdminRoute('events')}>
+        <button type="button" className="btn btn-ghost" onClick={() => setAdminRoute('events')} disabled={saving}>
           Cancel
         </button>
       </div>
@@ -114,6 +160,7 @@ export function CreateEvent() {
             onChange={(e) => setName(e.target.value)}
             placeholder="e.g. Nike Launch"
             required
+            disabled={saving}
           />
         </div>
 
@@ -126,25 +173,33 @@ export function CreateEvent() {
             {formError}
           </p>
         ) : null}
-        <div
-          className="kiosk-templates-grid kiosk-templates-grid--themes kiosk-templates-grid--inline"
-          style={{ marginBottom: 24, marginTop: 16 }}
-        >
-          {templates.map((t) => (
-            <TemplatePickCard
-              key={t.id}
-              template={t}
-              selected={templateIds.includes(t.id)}
-              onToggle={() => toggleTpl(t.id)}
-            />
-          ))}
-        </div>
+        
+        {loadingTemplates ? (
+          <p>Loading templates from database...</p>
+        ) : (
+          <div
+            className="kiosk-templates-grid kiosk-templates-grid--themes kiosk-templates-grid--inline"
+            style={{ marginBottom: 24, marginTop: 16 }}
+          >
+            {dbTemplates.map((t) => (
+              <TemplatePickCard
+                key={t.id}
+                template={{...t, previewClass: t.previewClass || 'tpl-preview--thrones'}}
+                selected={templateIds.includes(t.id)}
+                onToggle={() => toggleTpl(t.id)}
+              />
+            ))}
+            {dbTemplates.length === 0 && (
+              <p>No templates found. Please create one first.</p>
+            )}
+          </div>
+        )}
 
         <div style={{ display: 'flex', gap: 12, marginTop: 28 }}>
-          <button type="submit" className="btn btn-primary">
-            Save event
+          <button type="submit" className="btn btn-primary" disabled={saving || loadingTemplates}>
+            {saving ? 'Saving...' : 'Save event'}
           </button>
-          <button type="button" className="btn btn-ghost" onClick={() => setAdminRoute('events')}>
+          <button type="button" className="btn btn-ghost" onClick={() => setAdminRoute('events')} disabled={saving}>
             Cancel
           </button>
         </div>

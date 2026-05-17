@@ -39,3 +39,11 @@ export async function updateTemplate(id, templateData) {
 export async function deleteTemplate(id) {
   return apiRequest('DELETE', `/delete-template/${id}`);
 }
+
+export async function createEvent(eventData) {
+  return apiRequest('POST', '/create-event', eventData);
+}
+
+export async function getEvents() {
+  return apiRequest('GET', '/show-events');
+}

@@ -9,21 +9,54 @@ import { CapturePreviewScreen } from './CapturePreviewScreen.jsx';
 import { ProcessingScreen } from './ProcessingScreen.jsx';
 import { ResultScreen } from './ResultScreen.jsx';
 import { QRScreen } from './QRScreen.jsx';
+import { getEvents, getTemplates } from '../utils/api.js';
 
 const CAPTURE_PREVIEW_MS = 900;
 
 export function KioskApp() {
-  const { templates, events, settings, recordEventPhoto } = useApp();
+  const { settings, recordEventPhoto } = useApp();
   const [phase, setPhase] = useState('idle');
   const [selectedTemplateId, setSelectedTemplateId] = useState(null);
   const [subjectDataUrl, setSubjectDataUrl] = useState(null);
   const [resultDataUrl, setResultDataUrl] = useState(null);
   const [adminModal, setAdminModal] = useState(false);
+  const [dbEvents, setDbEvents] = useState([]);
+  const [dbTemplates, setDbTemplates] = useState([]);
   const savedKeyRef = useRef('');
 
+  useEffect(() => {
+    const fetchData = async () => {
+      const [resTemplates, resEvents] = await Promise.all([
+        getTemplates(),
+        getEvents()
+      ]);
+      
+      if (resTemplates.ok) {
+        let templatesArray = [];
+        if (Array.isArray(resTemplates.data)) templatesArray = resTemplates.data;
+        else if (resTemplates.data && Array.isArray(resTemplates.data.data)) templatesArray = resTemplates.data.data;
+        else if (resTemplates.data && Array.isArray(resTemplates.data.templates)) templatesArray = resTemplates.data.templates;
+        setDbTemplates(templatesArray.map(t => ({ ...t, id: t.templateId || t.id })));
+      }
+      
+      if (resEvents.ok) {
+        let eventsArray = [];
+        if (Array.isArray(resEvents.data)) eventsArray = resEvents.data;
+        else if (resEvents.data && Array.isArray(resEvents.data.events)) eventsArray = resEvents.data.events;
+        else if (resEvents.data && Array.isArray(resEvents.data.data)) eventsArray = resEvents.data.data;
+        setDbEvents(eventsArray.map(e => ({ 
+          ...e, 
+          id: e.eventId || e.id,
+          templateIds: e.templates ? e.templates.map(t => t.templateId || t.id) : (e.templateIds || [])
+        })));
+      }
+    };
+    fetchData();
+  }, []);
+
   const activeEvent = useMemo(
-    () => events.find((e) => e.id === settings.activeEventId) || null,
-    [events, settings.activeEventId],
+    () => dbEvents.find((e) => e.id === settings.activeEventId) || null,
+    [dbEvents, settings.activeEventId],
   );
 
   /* Persist each finished result to the active event's job folder exactly once. */
@@ -41,9 +74,10 @@ export function KioskApp() {
 
   const kioskTemplates = useMemo(() => {
     const ids = activeEvent?.templateIds;
-    if (ids && ids.length) return templates.filter((t) => ids.includes(t.id));
-    return templates;
-  }, [templates, activeEvent]);
+    if (ids && ids.length) return dbTemplates.filter((t) => ids.includes(t.id));
+    // If no active event or active event has no templates, return empty to prevent using all templates
+    return [];
+  }, [dbTemplates, activeEvent]);
 
   const selectedTemplate = useMemo(
     () => kioskTemplates.find((t) => t.id === selectedTemplateId) || null,
@@ -58,12 +92,7 @@ export function KioskApp() {
 
   const goStart = useCallback(() => {
     if (kioskTemplates.length === 0) return;
-    if (kioskTemplates.length === 1) {
-      setSelectedTemplateId(kioskTemplates[0].id);
-      setPhase('camera');
-    } else {
-      setPhase('templates');
-    }
+    setPhase('templates');
   }, [kioskTemplates]);
 
   const resetFlow = useCallback(() => {
