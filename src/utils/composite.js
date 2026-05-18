@@ -151,8 +151,8 @@ async function fillCanvasBackground(ctx, template, width, height) {
 export async function compositePortrait({
   subjectDataUrl,
   template,
-  width = 1080,
-  height = 1350,
+  width = 1920,
+  height = 1080,
 }) {
   const canvas = document.createElement('canvas');
   canvas.width = width;

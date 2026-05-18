@@ -36,7 +36,7 @@ export function KioskApp() {
         if (Array.isArray(resTemplates.data)) templatesArray = resTemplates.data;
         else if (resTemplates.data && Array.isArray(resTemplates.data.data)) templatesArray = resTemplates.data.data;
         else if (resTemplates.data && Array.isArray(resTemplates.data.templates)) templatesArray = resTemplates.data.templates;
-        setDbTemplates(templatesArray.map(t => ({ ...t, id: t.templateId || t.id })));
+        setDbTemplates(templatesArray.map(t => ({ ...t, id: t.templateId || t.id, backgroundUrl: t.backgroundUrl || t.templateImageUrl || null })));
       }
       
       if (resEvents.ok) {

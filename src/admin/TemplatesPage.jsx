@@ -28,7 +28,7 @@ export function TemplatesPage() {
       else if (res.data && Array.isArray(res.data.templates)) templatesArray = res.data.templates;
       
       // Map the backend's templateId to the frontend's id property
-      setDbTemplates(templatesArray.map(t => ({ ...t, id: t.templateId || t.id })));
+      setDbTemplates(templatesArray.map(t => ({ ...t, id: t.templateId || t.id, backgroundUrl: t.backgroundUrl || t.templateImageUrl || null })));
     } else {
       setError(res.error || `Failed to load templates. Raw response: ${JSON.stringify(res)}`);
     }

@@ -20,11 +20,11 @@ function clampInt(value, min, max) {
   return Math.min(max, Math.max(min, Math.round(Number(value) || 0)));
 }
 
-function FileUploadRow({ id, title, cta = 'Choose file', subtitle, onChange }) {
+function FileUploadRow({ id, title, cta = 'Choose file', subtitle, onChange, uploaded = false }) {
   return (
     <div className="field field--full">
       <div className="field-heading">{title}</div>
-      <label className="file-upload" htmlFor={id}>
+      <label className={`file-upload${uploaded ? ' file-upload--uploaded' : ''}`} htmlFor={id}>
         <input
           id={id}
           type="file"
@@ -33,11 +33,17 @@ function FileUploadRow({ id, title, cta = 'Choose file', subtitle, onChange }) {
           onChange={onChange}
         />
         <span className="file-upload__face">
-          <span className="file-upload__glyph" aria-hidden />
-          <span className="file-upload__copy">
-            <strong>{cta}</strong>
-            {subtitle ? <small>{subtitle}</small> : null}
+          <span className="file-upload__face-row">
+            {uploaded ? (
+              <svg className="file-upload__check-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                <polyline points="20 6 9 17 4 12" />
+              </svg>
+            ) : (
+              <span className="file-upload__glyph" aria-hidden />
+            )}
+            <strong className="file-upload__cta">{uploaded ? 'Uploaded — click to change' : cta}</strong>
           </span>
+          {subtitle && !uploaded ? <small className="file-upload__subtitle">{subtitle}</small> : null}
         </span>
       </label>
     </div>
@@ -204,6 +210,7 @@ export function TemplateEditor() {
           const t = res.data;
           const copy = JSON.parse(JSON.stringify(t));
           copy.id = copy.templateId || copy.id;
+          copy.backgroundUrl = copy.backgroundUrl || copy.templateImageUrl || null;
           copy.steps = Math.min(20, Math.max(0, Number(copy.steps) || 6));
           copy.fontSize = normalizeFontSizePx(copy.fontSize);
           const lp = Math.round(Number(copy.logoScale || 0.22) * 100);
@@ -330,6 +337,7 @@ export function TemplateEditor() {
         y: Math.round(draft.textY ?? 50),
       },
       logoUrl: draft.logoUrl || '',
+      templateImageUrl: draft.backgroundUrl || '',
       logoScale: draft.logoScale ?? 0.08,
       logoLocked: false,
       logoPosition: {
@@ -674,9 +682,10 @@ export function TemplateEditor() {
               <FileUploadRow
                 id="tpl-logo"
                 title="Logo"
-                cta="+ Upload Logo"
+                cta="Upload Logo"
                 subtitle="Drag & drop or click to upload"
                 onChange={onLogoFile}
+                uploaded={!!draft.logoUrl}
               />
               <div className="field">
                 <label htmlFor="logo-scale">Scale</label>
@@ -702,6 +711,20 @@ export function TemplateEditor() {
                 x={draft.logoX}
                 y={draft.logoY}
                 onPlace={(x, y) => setDraft((d) => ({ ...d, logoX: x, logoY: y }))}
+              />
+            </div>
+          </section>
+
+          <section className="editor-card">
+            <h2 className="editor-card__title">Upload Cover</h2>
+            <div className="editor-card__grid">
+              <FileUploadRow
+                id="tpl-cover"
+                title="Cover Image"
+                cta="Upload Cover Image"
+                subtitle="JPG, PNG · Recommended 1080×1080 or 1080×1920"
+                onChange={onBgFile}
+                uploaded={!!draft.backgroundUrl}
               />
             </div>
           </section>

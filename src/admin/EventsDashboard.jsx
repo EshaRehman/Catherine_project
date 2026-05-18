@@ -42,7 +42,7 @@ export function EventsDashboard() {
       if (Array.isArray(resTemplates.data)) templatesArray = resTemplates.data;
       else if (resTemplates.data && Array.isArray(resTemplates.data.data)) templatesArray = resTemplates.data.data;
       else if (resTemplates.data && Array.isArray(resTemplates.data.templates)) templatesArray = resTemplates.data.templates;
-      setDbTemplates(templatesArray.map(t => ({ ...t, id: t.templateId || t.id })));
+      setDbTemplates(templatesArray.map(t => ({ ...t, id: t.templateId || t.id, backgroundUrl: t.backgroundUrl || t.templateImageUrl || null })));
     }
 
     if (resEvents.ok) {
@@ -212,7 +212,6 @@ export function EventsDashboard() {
       <div className="admin-page-head">
         <div className="admin-page-head__titles">
           <h1 className="admin-page-title">Events</h1>
-          <p className="admin-page-sub">Manage experiences and assigned looks.</p>
         </div>
         <div className="admin-page-head__actions">
           <button type="button" className="btn btn-primary" onClick={() => openEventForm(null)}>
@@ -310,6 +309,7 @@ export function EventsDashboard() {
         </div>
       ) : null}
 
+  
       <div className="card-grid card-grid--events">
         {loadingEvents ? (
           <p className="admin-page-sub" style={{ gridColumn: '1 / -1' }}>Loading events...</p>
@@ -333,20 +333,21 @@ export function EventsDashboard() {
             const isBusy = busyId === ev.id;
             const noPhotos = photoCount === 0;
             return (
-              <article key={ev.id} className="card">
+              <article key={ev.id} className="card event-card">
                 <div className="card-body">
                   <div className="card-title-row">
                     <h2 className="card-title">{ev.name}</h2>
                     {isLive ? (
                       <span className="event-live-badge" title="This event drives the kiosk">
-                        Live
+                        LIVE
                       </span>
                     ) : null}
                   </div>
                   <p className="card-meta">
-                    {dateStr}
-                    {ev.status ? ` · ${ev.status}` : ''}
+                    {dateStr}{ev.status ? ` · ${ev.status}` : ''}
                   </p>
+
+                  <div className="event-card__divider" aria-hidden />
 
                   <div className="event-job-row">
                     <span className="event-job-count" title="Photos saved for this event">
@@ -387,7 +388,7 @@ export function EventsDashboard() {
                     </div>
                   </div>
 
-                  <div className="card-actions">
+                  <div className="card-actions event-card__actions">
                     {isLive ? (
                       <button
                         type="button"

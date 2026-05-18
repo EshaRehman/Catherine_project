@@ -397,7 +397,11 @@ select {
   width: 100%;
 }
 
-.card-grid--events,
+.card-grid--events {
+  grid-template-columns: repeat(auto-fill, minmax(280px, 380px));
+  justify-content: start;
+}
+
 .card-grid--templates {
   justify-content: start;
 }
@@ -482,22 +486,23 @@ select {
 }
 
 .card-body {
-  padding: 16px 18px 18px;
+  padding: 20px 22px 20px;
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 10px;
 }
 
 .card-title {
   margin: 0;
-  font-size: 1.05rem;
+  font-size: 1.1rem;
   font-weight: 700;
   letter-spacing: -0.02em;
 }
 
 .card-meta {
-  font-size: 0.82rem;
+  font-size: 0.8rem;
   color: var(--ink-muted);
+  margin-top: -4px;
 }
 
 .card-title-row {
@@ -857,9 +862,10 @@ select {
 
 .file-upload__face {
   display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 10px;
+  gap: 4px;
   padding: 14px 20px;
   border-radius: var(--radius-md);
   font-weight: 600;
@@ -874,6 +880,12 @@ select {
     transform 0.15s;
 }
 
+.file-upload__face-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
 .file-upload:hover .file-upload__face {
   border-color: var(--accent);
   background: linear-gradient(135deg, rgba(212, 160, 23, 0.16), rgba(212, 160, 23, 0.08));
@@ -881,6 +893,23 @@ select {
 
 .file-upload:active .file-upload__face {
   transform: scale(0.99);
+}
+
+.file-upload--uploaded .file-upload__face {
+  border-color: var(--accent);
+  border-style: solid;
+  background: linear-gradient(135deg, rgba(212, 160, 23, 0.12), rgba(212, 160, 23, 0.05));
+  color: var(--accent);
+}
+
+.file-upload--uploaded:hover .file-upload__face {
+  border-color: var(--accent);
+  background: linear-gradient(135deg, rgba(212, 160, 23, 0.18), rgba(212, 160, 23, 0.08));
+}
+
+.file-upload__check-icon {
+  color: var(--accent);
+  flex-shrink: 0;
 }
 
 .file-upload__glyph {
@@ -1208,6 +1237,47 @@ select {
   color: #201235;
 }
 
+.editor-card__section-header {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin-bottom: 16px;
+}
+
+.editor-card__section-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  background: #f3eeff;
+  color: #7c3aed;
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+.editor-card__section-title {
+  font-size: 1.02rem;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  color: #201235;
+}
+
+.editor-card__section-desc {
+  font-size: 0.78rem;
+  color: #6b7280;
+  margin-top: 2px;
+}
+
+.cover-thumb {
+  width: 100%;
+  max-height: 140px;
+  object-fit: cover;
+  border-radius: 8px;
+  border: 1px solid #e5e7eb;
+}
+
 .editor-card__grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -1375,18 +1445,12 @@ select {
   opacity: 0.65;
 }
 
-.file-upload__copy {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 3px;
-}
-
-.file-upload__copy strong {
+.file-upload__cta {
   font-size: 0.94rem;
+  font-weight: 600;
 }
 
-.file-upload__copy small {
+.file-upload__subtitle {
   font-size: 0.74rem;
   color: var(--ink-muted);
 }
@@ -2219,7 +2283,7 @@ select {
   padding: 4px 20px 4px;
 }
 
-/* Shared portrait stage — 4:5 (1080×1350) — camera / processing / result use identical outer frame */
+/* Shared landscape stage — 16:9 (1920×1080) — camera / processing / result use identical outer frame */
 .kiosk-portrait-frame {
   position: relative;
   border-radius: clamp(18px, 2.5vw, 28px);
@@ -2232,14 +2296,14 @@ select {
     linear-gradient(165deg, #1e1830 0%, #0f0c18 45%, #1a1428 100%);
 }
 
-/* Camera → processing → result: one 9:16 slot, fills available height, never overflows */
+/* Camera → processing → result: one 16:9 slot, fills available width, never overflows */
 .kiosk-portrait-frame.kiosk-flow-frame {
-  --frame-max-h: calc(100dvh - 120px);
-  /* Height drives the box; width follows the 9:16 ratio */
-  height: var(--frame-max-h);
-  width: calc(var(--frame-max-h) * 9 / 16);
-  aspect-ratio: 9 / 16;
-  max-width: min(96vw, calc(var(--frame-max-h) * 9 / 16));
+  --frame-max-w: min(96vw, calc((100dvh - 120px) * 16 / 9));
+  /* Width drives the box; height follows the 16:9 ratio */
+  width: var(--frame-max-w);
+  height: calc(var(--frame-max-w) * 9 / 16);
+  aspect-ratio: 16 / 9;
+  max-height: calc(100dvh - 120px);
   box-sizing: border-box;
 }
 
@@ -3093,17 +3157,28 @@ select {
   box-shadow: none;
 }
 
+
+/* --- Event card --- */
+.event-card {
+  border: 1px solid rgba(61, 43, 86, 0.08);
+}
+
+.event-card__divider {
+  height: 1px;
+  background: rgba(61, 43, 86, 0.08);
+  margin: 2px 0;
+}
+
+.event-card__actions {
+  margin-top: 2px;
+}
+
 /* --- Event card: per-job (download / email) row --- */
 .event-job-row {
   display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-  padding: 10px 12px;
-  border-radius: var(--radius-md);
-  background: rgba(212, 160, 23, 0.08);
-  border: 1px solid rgba(212, 160, 23, 0.18);
+  flex-direction: column;
+  gap: 8px;
+  padding-top: 4px;
 }
 
 .event-job-row__actions {
@@ -3115,7 +3190,7 @@ select {
 .event-job-count {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
+  gap: 7px;
   font-size: 0.82rem;
   font-weight: 600;
   color: var(--ink);
@@ -3125,8 +3200,8 @@ select {
   width: 8px;
   height: 8px;
   border-radius: 50%;
-  background: linear-gradient(135deg, #f5a623 0%, #4f9d56 100%);
-  box-shadow: 0 0 0 2px rgba(255, 220, 150, 0.45);
+  background: var(--accent);
+  flex-shrink: 0;
 }
 
 /* --- Toast inside admin main --- */
