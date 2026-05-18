@@ -128,11 +128,8 @@ export function KioskApp() {
             setPhase('captured');
           }}
           onBack={() => {
-            if (kioskTemplates.length === 1) resetFlow();
-            else {
-              setSelectedTemplateId(null);
-              setPhase('templates');
-            }
+            setSelectedTemplateId(null);
+            setPhase('templates');
           }}
         />
       )}

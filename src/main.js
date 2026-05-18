@@ -80,6 +80,89 @@ ipcMain.handle('api-request', async (_event, { method, url, payload }) => {
   return httpRequest(method, url, payload);
 });
 
+/* ---- Multipart POST for /generate (sends image as form-data) ---- */
+
+ipcMain.handle('api-generate', async (_event, { url, imageBase64, templateId, seed }) => {
+  return new Promise((resolve, reject) => {
+    // Strip the data URL prefix to get raw base64
+    const base64Data = imageBase64.replace(/^data:image\/\w+;base64,/, '');
+    const imageBuffer = Buffer.from(base64Data, 'base64');
+
+    const boundary = `----FormBoundary${Date.now().toString(16)}`;
+    const CRLF = '\r\n';
+
+    // Build multipart body parts
+    const parts = [];
+
+    // image field
+    parts.push(
+      `--${boundary}${CRLF}` +
+      `Content-Disposition: form-data; name="image"; filename="capture.jpg"${CRLF}` +
+      `Content-Type: image/jpeg${CRLF}${CRLF}`
+    );
+
+    // template_id field
+    const templatePart = Buffer.from(
+      `--${boundary}${CRLF}` +
+      `Content-Disposition: form-data; name="template_id"${CRLF}${CRLF}` +
+      `${templateId}${CRLF}`,
+      'utf8'
+    );
+
+    const closingBoundary = Buffer.from(`--${boundary}--${CRLF}`, 'utf8');
+
+    const imagePartHeader = Buffer.from(parts[0], 'utf8');
+    const imagePartFooter = Buffer.from(CRLF, 'utf8');
+
+    let seedPart = Buffer.alloc(0);
+    if (seed !== undefined && seed !== null) {
+      seedPart = Buffer.from(
+        `--${boundary}${CRLF}` +
+        `Content-Disposition: form-data; name="seed"${CRLF}${CRLF}` +
+        `${seed}${CRLF}`,
+        'utf8'
+      );
+    }
+
+    const bodyBuffer = Buffer.concat([
+      imagePartHeader,
+      imageBuffer,
+      imagePartFooter,
+      templatePart,
+      seedPart,
+      closingBoundary,
+    ]);
+
+    const parsed = new URL(url);
+    const isHttps = parsed.protocol === 'https:';
+    const transport = isHttps ? https : http;
+
+    const options = {
+      hostname: parsed.hostname,
+      port: parsed.port || (isHttps ? 443 : 80),
+      path: parsed.pathname + parsed.search,
+      method: 'POST',
+      headers: {
+        'Content-Type': `multipart/form-data; boundary=${boundary}`,
+        'Content-Length': bodyBuffer.length,
+      },
+    };
+
+    const req = transport.request(options, (res) => {
+      const chunks = [];
+      res.on('data', (chunk) => chunks.push(chunk));
+      res.on('end', () => {
+        const raw = Buffer.concat(chunks).toString('utf8');
+        try { resolve({ status: res.statusCode, body: JSON.parse(raw) }); }
+        catch { resolve({ status: res.statusCode, body: raw }); }
+      });
+    });
+    req.on('error', reject);
+    req.write(bodyBuffer);
+    req.end();
+  });
+});
+
 /* ---- Job photo storage (per-event folders under userData/jobs/<eventId>) ---- */
 
 const SAFE_ID_RE = /^[A-Za-z0-9_-]+$/;

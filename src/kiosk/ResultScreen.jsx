@@ -1,10 +1,9 @@
 import React from 'react';
-import finalResultImage from '../assets/final-result.jpeg';
 
 /** Final generated image stage; falls back to template plate only if needed. */
 export function ResultScreen({ imageDataUrl, template, onQR, onRegenerate }) {
   const pc = template?.previewClass || 'tpl-preview--thrones';
-  const url = finalResultImage || imageDataUrl || template?.backgroundUrl;
+  const url = imageDataUrl || template?.backgroundUrl;
 
   return (
     <div className="result-screen">

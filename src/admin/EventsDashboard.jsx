@@ -3,12 +3,9 @@ import { useApp } from '../state/AppContext.jsx';
 import { TemplateThemePreview } from '../components/TemplateThemePreview.jsx';
 import { ConfirmModal } from '../components/ConfirmModal.jsx';
 import { EmailJobModal } from '../components/EmailJobModal.jsx';
-import { getEvents, getTemplates } from '../utils/api.js';
+import { getEvents, getTemplates, deleteEventApi } from '../utils/api.js';
 
-function PreviewThumb({ template }) {
-  const fallback = { backgroundUrl: null, previewClass: 'tpl-preview--thrones' };
-  return <TemplateThemePreview template={template || fallback} variant="admin" />;
-}
+
 
 export function EventsDashboard() {
   const [deleteTarget, setDeleteTarget] = useState(null);
@@ -171,14 +168,20 @@ export function EventsDashboard() {
 
   const handleDeleteEvent = async () => {
     if (deleteTarget) {
-      // NOTE: Normally you'd want to call the delete event API here
-      // const res = await deleteEventApi(deleteTarget.id);
-      // if (res.ok) {
-      //   setDbEvents(prev => prev.filter(e => e.id !== deleteTarget.id));
-      // }
-      // The instruction did not mention delete api for events but only create events and show events
-      deleteEvent(deleteTarget.id);
-      setDbEvents(prev => prev.filter(e => e.id !== deleteTarget.id));
+      setBusyId(deleteTarget.id);
+      try {
+        const res = await deleteEventApi(deleteTarget.id);
+        if (res.ok) {
+          setDbEvents(prev => prev.filter(e => e.id !== deleteTarget.id));
+          showToast(`Event deleted successfully.`);
+        } else {
+          showToast(res.error || 'Failed to delete event from database.', 'error');
+        }
+      } catch (err) {
+        showToast('Error connecting to the database.', 'error');
+      } finally {
+        setBusyId(null);
+      }
     }
     setDeleteTarget(null);
   };
@@ -331,9 +334,6 @@ export function EventsDashboard() {
             const noPhotos = photoCount === 0;
             return (
               <article key={ev.id} className="card">
-                <div className="card-preview">
-                  <PreviewThumb template={tpl} />
-                </div>
                 <div className="card-body">
                   <div className="card-title-row">
                     <h2 className="card-title">{ev.name}</h2>

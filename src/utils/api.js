@@ -47,3 +47,24 @@ export async function createEvent(eventData) {
 export async function getEvents() {
   return apiRequest('GET', '/show-events');
 }
+
+export async function deleteEventApi(id) {
+  return apiRequest('DELETE', `/delete-event/${id}`);
+}
+
+export async function generateImage(imageBase64, templateId, seed) {
+  const bridge = window?.catherine?.api;
+  if (!bridge) {
+    return { ok: false, error: 'API bridge not available.' };
+  }
+  try {
+    const res = await bridge.generate(`${BASE_URL}/generate`, imageBase64, templateId, seed);
+    if (res.status < 200 || res.status >= 300) {
+      const detail = res.body?.detail || res.body?.message || `Server error ${res.status}`;
+      return { ok: false, error: detail };
+    }
+    return { ok: true, data: res.body };
+  } catch (err) {
+    return { ok: false, error: err?.message || 'Unexpected error calling /generate.' };
+  }
+}

@@ -42,36 +42,10 @@ export function AppProvider({ children }) {
   });
 
   useEffect(() => {
+    // Templates and events are loaded from the FastAPI DB, not localStorage.
+    // Only persist adminPassword and settings locally.
     const s = loadState();
     if (s) {
-      if (Array.isArray(s.templates) && s.templates.length) {
-        setTemplates(
-          migrateStoredKioskTemplates(s.templates).map((t) => {
-            let nt = { ...t };
-            if (!nt.previewClass) {
-              const n = (nt.name || '').toLowerCase();
-              let previewClass = 'tpl-preview--thrones';
-              if (n.includes('f1') || n.includes('racing')) previewClass = 'tpl-preview--f1';
-              else if (n.includes('wizard') || n.includes('potter') || n.includes('magic'))
-                previewClass = 'tpl-preview--wizard';
-              else if (n.includes('viking') || n.includes('nordic'))
-                previewClass = 'tpl-preview--viking';
-              else if (n.includes('throne') || n.includes('realm') || n.includes('medieval'))
-                previewClass = 'tpl-preview--thrones';
-              else if (n.includes('cyber')) previewClass = 'tpl-preview--cyber';
-              else if (n.includes('luxury') || n.includes('editorial'))
-                previewClass = 'tpl-preview--luxury';
-              nt = { ...nt, previewClass };
-            }
-            const presetBg = PRESET_DEFAULT_BACKGROUND_URLS[nt.previewClass];
-            if (!nt.backgroundUrl && presetBg) {
-              nt = { ...nt, backgroundUrl: presetBg };
-            }
-            return nt;
-          }),
-        );
-      }
-      if (Array.isArray(s.events)) setEvents(s.events);
       if (typeof s.adminPassword === 'string' && s.adminPassword.length)
         setAdminPassword(s.adminPassword);
       if (s.settings && typeof s.settings === 'object')
@@ -82,13 +56,12 @@ export function AppProvider({ children }) {
 
   useEffect(() => {
     if (!hydrated) return;
+    // Only persist adminPassword and settings — templates/events live in the DB.
     saveState({
-      templates,
-      events,
       adminPassword,
       settings,
     });
-  }, [hydrated, templates, events, adminPassword, settings]);
+  }, [hydrated, adminPassword, settings]);
 
   const getTemplate = useCallback(
     (id) => templates.find((t) => t.id === id) || null,

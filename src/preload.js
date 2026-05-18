@@ -4,6 +4,7 @@ contextBridge.exposeInMainWorld('catherine', {
   printDataUrl: (dataUrl) => ipcRenderer.invoke('print-data-url', dataUrl),
   api: {
     request: (method, url, payload) => ipcRenderer.invoke('api-request', { method, url, payload }),
+    generate: (url, imageBase64, templateId, seed) => ipcRenderer.invoke('api-generate', { url, imageBase64, templateId, seed }),
   },
   gmail: {
     getStatus: () => ipcRenderer.invoke('gmail-auth-status'),

@@ -221,7 +221,7 @@ select {
 }
 
 /* Vertical nav: comfortable inset inside the rounded hit area / active pill */
-.admin-nav.admin-nav--vertical > button {
+.admin-nav.admin-nav--vertical>button {
   width: 100%;
   text-align: left;
   justify-content: flex-start;
@@ -341,13 +341,11 @@ select {
 .btn-primary {
   position: relative;
   overflow: hidden;
-  background: linear-gradient(
-    100deg,
-    #f5a623 0%,
-    #f5a623 32%,
-    #b89a36 65%,
-    #4f9d56 100%
-  );
+  background: linear-gradient(100deg,
+      #f5a623 0%,
+      #f5a623 32%,
+      #b89a36 65%,
+      #4f9d56 100%);
   color: #fff;
   text-shadow: 0 1px 2px rgba(60, 30, 0, 0.35);
   box-shadow:
@@ -422,7 +420,7 @@ select {
 }
 
 .card-preview {
-  aspect-ratio: 4 / 5;
+  aspect-ratio: 9 / 16;
   position: relative;
   background: #e8e4de;
   overflow: hidden;
@@ -674,7 +672,7 @@ select {
   min-width: 0;
 }
 
-.field .field__slider-line > label {
+.field .field__slider-line>label {
   display: inline-block !important;
   margin-bottom: 0 !important;
   flex-shrink: 0;
@@ -1002,7 +1000,7 @@ select {
   align-items: stretch;
 }
 
-.template-editor-page__split > * {
+.template-editor-page__split>* {
   min-height: 0;
 }
 
@@ -1014,7 +1012,7 @@ select {
 }
 
 /* Scrollable form: override generic .editor-scroll max-height so the grid cell height wins */
-.template-editor-page__split > .editor-scroll.template-editor-page__form {
+.template-editor-page__split>.editor-scroll.template-editor-page__form {
   height: 100%;
   max-height: none;
   min-height: 0;
@@ -1261,7 +1259,7 @@ select {
   margin-bottom: 8px;
 }
 
-.slider-field__top > label {
+.slider-field__top>label {
   margin-bottom: 0 !important;
 }
 
@@ -1307,7 +1305,7 @@ select {
   margin-bottom: 6px;
 }
 
-.position-pad-toolbar > label {
+.position-pad-toolbar>label {
   margin-bottom: 0 !important;
 }
 
@@ -1438,13 +1436,12 @@ select {
   background: #111;
 }
 
-/* Template editor: kiosk-matching 9:16 portrait (must follow .preview-stage so it wins the cascade) */
+/* Template editor: kiosk-matching portrait (must follow .preview-stage so it wins the cascade) */
 .preview-stage.preview-stage--compact {
-  width: 100%;
-  max-width: min(320px, 92vw);
+  height: min(65dvh, 500px);
+  width: auto;
+  max-width: 100%;
   aspect-ratio: 9 / 16;
-  height: auto;
-  max-height: min(72dvh, 720px);
   border-radius: 20px;
   flex-shrink: 0;
   overflow: hidden;
@@ -1581,8 +1578,7 @@ select {
   flex-direction: column;
   align-items: center;
   gap: 14px;
-  padding: 12px max(20px, env(safe-area-inset-right)) max(40px, calc(env(safe-area-inset-bottom) + 28px))
-    max(20px, env(safe-area-inset-left));
+  padding: 12px max(20px, env(safe-area-inset-right)) max(40px, calc(env(safe-area-inset-bottom) + 28px)) max(20px, env(safe-area-inset-left));
   box-sizing: border-box;
   pointer-events: none;
   background: transparent;
@@ -1642,15 +1638,13 @@ select {
   letter-spacing: 0.02em;
   border-radius: var(--radius-pill);
   border: none;
-  background: linear-gradient(
-    100deg,
-    #f5a623 0%,
-    #ff8a2a 18%,
-    #f5a623 32%,
-    #b89a36 60%,
-    #4f9d56 92%,
-    #1f8f6e 110%
-  );
+  background: linear-gradient(100deg,
+      #f5a623 0%,
+      #ff8a2a 18%,
+      #f5a623 32%,
+      #b89a36 60%,
+      #4f9d56 92%,
+      #1f8f6e 110%);
   color: #fff;
   cursor: pointer;
   overflow: hidden;
@@ -1676,22 +1670,22 @@ select {
   left: -60%;
   width: 40%;
   height: 100%;
-  background: linear-gradient(
-    105deg,
-    transparent 0%,
-    rgba(255, 255, 255, 0.45) 45%,
-    transparent 70%
-  );
+  background: linear-gradient(105deg,
+      transparent 0%,
+      rgba(255, 255, 255, 0.45) 45%,
+      transparent 70%);
   animation: tap-shine 4.5s ease-in-out infinite;
   pointer-events: none;
   border-radius: inherit;
 }
 
 @keyframes tap-shine {
+
   0%,
   20% {
     left: -60%;
   }
+
   60%,
   100% {
     left: 140%;
@@ -1738,15 +1732,13 @@ select {
   height: 30px;
   border-radius: 9px;
   border: 2px solid #7a5614;
-  background: linear-gradient(
-    100deg,
-    #f5a623 0%,
-    #ff8a2a 18%,
-    #f5a623 32%,
-    #b89a36 60%,
-    #4f9d56 92%,
-    #1f8f6e 110%
-  );
+  background: linear-gradient(100deg,
+      #f5a623 0%,
+      #ff8a2a 18%,
+      #f5a623 32%,
+      #b89a36 60%,
+      #4f9d56 92%,
+      #1f8f6e 110%);
   opacity: 0.85;
   box-shadow:
     0 0 0 1px rgba(74, 52, 8, 0.55),
@@ -1942,15 +1934,13 @@ select {
 
 .kiosk-templates__headline-look {
   display: inline;
-  background: linear-gradient(
-    100deg,
-    #f5a623 0%,
-    #ff8a2a 18%,
-    #f5a623 32%,
-    #b89a36 60%,
-    #4f9d56 92%,
-    #1f8f6e 110%
-  );
+  background: linear-gradient(100deg,
+      #f5a623 0%,
+      #ff8a2a 18%,
+      #f5a623 32%,
+      #b89a36 60%,
+      #4f9d56 92%,
+      #1f8f6e 110%);
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
@@ -2087,6 +2077,7 @@ select {
 }
 
 @media (prefers-reduced-motion: reduce) {
+
   .kiosk-tpl-card,
   .kiosk-tpl-card:hover,
   .kiosk-tpl-card:focus-visible,
@@ -2136,11 +2127,9 @@ select {
   padding: 11px 26px 11px 30px;
   border-radius: var(--radius-pill);
   border: 1px solid rgba(255, 255, 255, 0.38);
-  background: linear-gradient(
-    145deg,
-    rgba(255, 255, 255, 0.22) 0%,
-    rgba(255, 255, 255, 0.06) 100%
-  );
+  background: linear-gradient(145deg,
+      rgba(255, 255, 255, 0.22) 0%,
+      rgba(255, 255, 255, 0.06) 100%);
   backdrop-filter: blur(10px);
   -webkit-backdrop-filter: blur(10px);
   box-shadow:
@@ -2243,15 +2232,14 @@ select {
     linear-gradient(165deg, #1e1830 0%, #0f0c18 45%, #1a1428 100%);
 }
 
-/* Camera → processing → result: one 4:5 slot, fills available height, never overflows */
+/* Camera → processing → result: one 9:16 slot, fills available height, never overflows */
 .kiosk-portrait-frame.kiosk-flow-frame {
-  --frame-max-h: min(86dvh, calc(100dvh - 180px));
-  /* Height drives the box; width follows the 4:5 ratio */
+  --frame-max-h: calc(100dvh - 120px);
+  /* Height drives the box; width follows the 9:16 ratio */
   height: var(--frame-max-h);
-  width: calc(var(--frame-max-h) * 4 / 5);
-  aspect-ratio: 4 / 5;
-  /* Never wider than the viewport (landscape or very wide screens) */
-  max-width: min(96vw, calc(var(--frame-max-h) * 4 / 5));
+  width: calc(var(--frame-max-h) * 9 / 16);
+  aspect-ratio: 9 / 16;
+  max-width: min(96vw, calc(var(--frame-max-h) * 9 / 16));
   box-sizing: border-box;
 }
 
@@ -2300,22 +2288,20 @@ select {
     0 0 160px rgba(0, 0, 0, 0.28) inset;
 }
 
-/* Processing: cinematic gold-bordered frame, identical to the camera viewfinder */
+/* Processing: frame with white background around the video */
 .kiosk-portrait-frame--processing {
-  background: #000;
+  background: #fff;
   border: 3px solid #d4a017;
   box-shadow:
     0 0 0 1px #6f4a10,
     0 30px 80px rgba(0, 0, 0, 0.55),
     0 0 32px rgba(255, 200, 90, 0.22),
-    0 0 70px rgba(255, 175, 60, 0.12),
-    0 1px 0 rgba(255, 230, 170, 0.18) inset,
-    0 0 90px rgba(0, 0, 0, 0.45) inset,
-    0 0 160px rgba(0, 0, 0, 0.28) inset;
+    0 0 70px rgba(255, 175, 60, 0.12);
 }
 
 .kiosk-portrait-frame--processing .kiosk-portrait-frame__media {
-  object-fit: cover;
+  object-fit: contain;
+  background: #fff;
 }
 
 .kiosk-portrait-frame--captured {
@@ -2357,6 +2343,7 @@ select {
     opacity: 0;
     transform: translate(-50%, 8px) scale(0.96);
   }
+
   to {
     opacity: 1;
     transform: translate(-50%, 0) scale(1);
@@ -2444,18 +2431,14 @@ select {
   justify-content: center;
   pointer-events: none;
   background:
-    radial-gradient(
-      ellipse at center,
+    radial-gradient(ellipse at center,
       rgba(255, 200, 90, 0.12) 0%,
       rgba(255, 200, 90, 0.06) 30%,
-      rgba(8, 6, 14, 0) 60%
-    ),
-    radial-gradient(
-      ellipse at center,
+      rgba(8, 6, 14, 0) 60%),
+    radial-gradient(ellipse at center,
       rgba(8, 6, 14, 0.34) 0%,
       rgba(8, 6, 14, 0.16) 45%,
-      rgba(8, 6, 14, 0) 78%
-    );
+      rgba(8, 6, 14, 0) 78%);
 }
 
 .camera-countdown__digit {
@@ -2467,15 +2450,13 @@ select {
   line-height: 1;
   letter-spacing: 0;
   /* Static multi-color gradient — same recipe as the kiosk buttons. */
-  background: linear-gradient(
-    100deg,
-    #f5a623 0%,
-    #ff8a2a 18%,
-    #f5a623 32%,
-    #b89a36 60%,
-    #4f9d56 92%,
-    #1f8f6e 110%
-  );
+  background: linear-gradient(100deg,
+      #f5a623 0%,
+      #ff8a2a 18%,
+      #f5a623 32%,
+      #b89a36 60%,
+      #4f9d56 92%,
+      #1f8f6e 110%);
   background-size: 100% 100%;
   background-position: 0 0;
   -webkit-background-clip: text;
@@ -2485,12 +2466,7 @@ select {
   -webkit-text-stroke: 7px #7a5614;
   paint-order: stroke fill;
   filter:
-    drop-shadow(0 0 0.6px #4a3408)
-    drop-shadow(0 0 0.6px #4a3408)
-    drop-shadow(0 5px 0 rgba(80, 50, 0, 0.85))
-    drop-shadow(0 12px 24px rgba(0, 0, 0, 0.55))
-    drop-shadow(0 0 18px rgba(255, 215, 110, 0.7))
-    drop-shadow(0 0 42px rgba(255, 175, 60, 0.45));
+    drop-shadow(0 0 0.6px #4a3408) drop-shadow(0 0 0.6px #4a3408) drop-shadow(0 5px 0 rgba(80, 50, 0, 0.85)) drop-shadow(0 12px 24px rgba(0, 0, 0, 0.55)) drop-shadow(0 0 18px rgba(255, 215, 110, 0.7)) drop-shadow(0 0 42px rgba(255, 175, 60, 0.45));
   animation: cameraCountdownTick 1000ms cubic-bezier(0.22, 0.8, 0.28, 1) both;
   will-change: transform, opacity, filter;
 }
@@ -2507,8 +2483,7 @@ select {
   display: block;
   color: #d4a017;
   filter:
-    drop-shadow(0 0 6px rgba(212, 160, 23, 0.9))
-    drop-shadow(0 0 14px rgba(212, 160, 23, 0.55));
+    drop-shadow(0 0 6px rgba(212, 160, 23, 0.9)) drop-shadow(0 0 14px rgba(212, 160, 23, 0.55));
   animation: cameraCountdownSparkle 1000ms cubic-bezier(0.22, 0.8, 0.28, 1) both;
   will-change: transform, opacity;
 }
@@ -2566,14 +2541,17 @@ select {
     opacity: 0;
     transform: scale(0.4) rotate(-25deg);
   }
+
   25% {
     opacity: 1;
     transform: scale(1) rotate(0deg);
   }
+
   70% {
     opacity: 1;
     transform: scale(1) rotate(8deg);
   }
+
   100% {
     opacity: 0;
     transform: scale(0.7) rotate(20deg);
@@ -2585,27 +2563,24 @@ select {
     opacity: 0;
     transform: scale(0.78);
     filter:
-      drop-shadow(0 5px 0 rgba(120, 80, 0, 0.85))
-      drop-shadow(0 12px 24px rgba(0, 0, 0, 0.55))
-      drop-shadow(0 0 28px rgba(255, 215, 110, 0.95))
-      drop-shadow(0 0 60px rgba(255, 170, 60, 0.6));
+      drop-shadow(0 5px 0 rgba(120, 80, 0, 0.85)) drop-shadow(0 12px 24px rgba(0, 0, 0, 0.55)) drop-shadow(0 0 28px rgba(255, 215, 110, 0.95)) drop-shadow(0 0 60px rgba(255, 170, 60, 0.6));
   }
+
   18% {
     opacity: 1;
     transform: scale(1);
   }
+
   72% {
     opacity: 1;
     transform: scale(1);
   }
+
   100% {
     opacity: 0;
     transform: scale(1.12);
     filter:
-      drop-shadow(0 5px 0 rgba(120, 80, 0, 0.85))
-      drop-shadow(0 12px 24px rgba(0, 0, 0, 0.4))
-      drop-shadow(0 0 32px rgba(255, 215, 110, 0.55))
-      drop-shadow(0 0 70px rgba(255, 170, 60, 0.3));
+      drop-shadow(0 5px 0 rgba(120, 80, 0, 0.85)) drop-shadow(0 12px 24px rgba(0, 0, 0, 0.4)) drop-shadow(0 0 32px rgba(255, 215, 110, 0.55)) drop-shadow(0 0 70px rgba(255, 170, 60, 0.3));
   }
 }
 
@@ -2627,12 +2602,10 @@ select {
   align-items: center;
   gap: 8px;
   padding: 10px 14px calc(14px + env(safe-area-inset-bottom, 0px));
-  background: linear-gradient(
-    to top,
-    rgba(0, 0, 0, 0.72) 0%,
-    rgba(0, 0, 0, 0.2) 55%,
-    transparent 100%
-  );
+  background: linear-gradient(to top,
+      rgba(0, 0, 0, 0.72) 0%,
+      rgba(0, 0, 0, 0.2) 55%,
+      transparent 100%);
   pointer-events: none;
 }
 
@@ -2699,15 +2672,13 @@ select {
   position: absolute;
   inset: 8px;
   border-radius: 50%;
-  background: linear-gradient(
-    100deg,
-    #f5a623 0%,
-    #ff8a2a 18%,
-    #f5a623 32%,
-    #b89a36 60%,
-    #4f9d56 92%,
-    #1f8f6e 110%
-  );
+  background: linear-gradient(100deg,
+      #f5a623 0%,
+      #ff8a2a 18%,
+      #f5a623 32%,
+      #b89a36 60%,
+      #4f9d56 92%,
+      #1f8f6e 110%);
   box-shadow:
     inset 0 2px 0 rgba(255, 255, 255, 0.55),
     inset 0 -3px 10px rgba(40, 60, 30, 0.35);
@@ -2722,6 +2693,7 @@ select {
 }
 
 @keyframes shutter-pulse-warm {
+
   0%,
   100% {
     box-shadow:
@@ -2730,6 +2702,7 @@ select {
       0 0 24px rgba(255, 196, 90, 0.5),
       0 0 48px rgba(79, 157, 86, 0.25);
   }
+
   50% {
     box-shadow:
       0 14px 52px rgba(0, 0, 0, 0.38),
@@ -2822,16 +2795,16 @@ select {
     opacity: 0;
     transform: scale(0.94);
     filter:
-      drop-shadow(0 0 50px rgba(255, 200, 90, 0.85))
-      drop-shadow(0 0 120px rgba(255, 175, 60, 0.55));
+      drop-shadow(0 0 50px rgba(255, 200, 90, 0.85)) drop-shadow(0 0 120px rgba(255, 175, 60, 0.55));
   }
+
   55% {
     opacity: 1;
     transform: scale(1.014);
     filter:
-      drop-shadow(0 0 30px rgba(255, 200, 90, 0.45))
-      drop-shadow(0 0 80px rgba(255, 175, 60, 0.25));
+      drop-shadow(0 0 30px rgba(255, 200, 90, 0.45)) drop-shadow(0 0 80px rgba(255, 175, 60, 0.25));
   }
+
   100% {
     opacity: 1;
     transform: scale(1);
@@ -2850,10 +2823,12 @@ select {
     transform: scale(1.07);
     filter: blur(10px) saturate(1.2) brightness(1.1);
   }
+
   40% {
     opacity: 1;
     filter: blur(3px) saturate(1.1) brightness(1.04);
   }
+
   100% {
     opacity: 1;
     transform: scale(1);
@@ -2870,9 +2845,11 @@ select {
   0% {
     opacity: 0;
   }
+
   35% {
     opacity: 0.4;
   }
+
   100% {
     opacity: 1;
   }
@@ -2892,6 +2869,7 @@ select {
     from {
       opacity: 0;
     }
+
     to {
       opacity: 1;
     }
@@ -3180,6 +3158,7 @@ select {
     opacity: 0;
     transform: translateY(-4px);
   }
+
   to {
     opacity: 1;
     transform: translateY(0);
@@ -3211,4 +3190,3 @@ select {
 .modal--job .modal-actions {
   margin-top: 8px;
 }
-

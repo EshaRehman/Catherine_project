@@ -21,8 +21,8 @@ export function CameraScreen({ onCapture, onBack }) {
           video: {
             facingMode: 'user',
             width: { ideal: 1080 },
-            height: { ideal: 1350 },
-            aspectRatio: { ideal: 1080 / 1350 },
+            height: { ideal: 1920 },
+            aspectRatio: { ideal: 1080 / 1920 },
           },
           audio: false,
         });
@@ -89,7 +89,7 @@ export function CameraScreen({ onCapture, onBack }) {
     const vw = video.videoWidth;
     const vh = video.videoHeight;
     const outW = 1080;
-    const outH = 1350;
+    const outH = 1920;
     const canvas = document.createElement('canvas');
     canvas.width = outW;
     canvas.height = outH;
