@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useApp } from '../state/AppContext.jsx';
-import { compositePreviewMock } from '../utils/composite.js';
-import { createTemplate, updateTemplate, getTemplateById } from '../utils/api.js';
+import { createTemplate, updateTemplate, getTemplateById, previewImageApi } from '../utils/api.js';
+import { compositePreviewMock, compositeResultPreview } from '../utils/composite.js';
 
 const FONTS = [
   { label: 'DM Sans', value: "'DM Sans', system-ui, sans-serif" },
@@ -185,8 +185,13 @@ export function TemplateEditor() {
   } = useApp();
 
   const [draft, setDraft] = useState(() => createDefaultTemplate());
-  const [previewUrl, setPreviewUrl] = useState(null);
-  const [generating, setGenerating] = useState(false);
+  const [previewPhase, setPreviewPhase] = useState('idle'); // 'idle'|'camera'|'processing'|'result'
+  const [resultDataUrl, setResultDataUrl] = useState(null);
+  const [idlePreviewUrl, setIdlePreviewUrl] = useState(null);
+  const [previewError, setPreviewError] = useState(null);
+  const [showResultModal, setShowResultModal] = useState(false);
+  const [camReady, setCamReady] = useState(false);
+  const [camCount, setCamCount] = useState(0);
   const [basePrompt, setBasePrompt] = useState('');
   const [numberOfPeople, setNumberOfPeople] = useState(1);
   const [peoplePrompts, setPeoplePrompts] = useState(defaultPeoplePrompts);
@@ -195,6 +200,13 @@ export function TemplateEditor() {
   const [loading, setLoading] = useState(false);
   const stageRef = useRef(null);
   const dragRef = useRef(null);
+  const camVideoRef = useRef(null);
+  const camStreamRef = useRef(null);
+  const camCountRunRef = useRef(0);
+  const basePromptRef = useRef(basePrompt);
+  const peoplePromptsRef = useRef(peoplePrompts);
+  const numberOfPeopleRef = useRef(numberOfPeople);
+  const draftRef = useRef(draft);
 
   const updatePeoplePrompt = (count, value) => {
     setPeoplePrompts((prev) => ({ ...prev, [count]: value }));
@@ -202,7 +214,9 @@ export function TemplateEditor() {
 
   useEffect(() => {
     const loadData = async () => {
-      setPreviewUrl(null);
+      setPreviewPhase('idle');
+      setResultDataUrl(null);
+      setPreviewError(null);
       if (editorTemplateId && !editorIsNew) {
         setLoading(true);
         const res = await getTemplateById(editorTemplateId);
@@ -215,7 +229,19 @@ export function TemplateEditor() {
           copy.fontSize = normalizeFontSizePx(copy.fontSize);
           const lp = Math.round(Number(copy.logoScale || 0.22) * 100);
           copy.logoScale = Math.min(45, Math.max(8, lp)) / 100;
-          
+          // Unpack nested position objects saved by the API
+          if (copy.textPosition) {
+            copy.textX = clampInt(copy.textPosition.x ?? copy.textX ?? 50, 0, 100);
+            copy.textY = clampInt(copy.textPosition.y ?? copy.textY ?? 78, 0, 100);
+          }
+          if (copy.logoPosition) {
+            copy.logoX = clampInt(copy.logoPosition.x ?? copy.logoX ?? 88, 0, 100);
+            copy.logoY = clampInt(copy.logoPosition.y ?? copy.logoY ?? 10, 0, 100);
+          }
+          if (!copy.overlayText) copy.overlayText = '';
+          if (!copy.textColor) copy.textColor = '#ffffff';
+          if (!copy.fontFamily) copy.fontFamily = "'DM Sans', system-ui, sans-serif";
+
           setDraft(copy);
           setBasePrompt(t.basePrompt || '');
           if (t.peoplePrompts) {
@@ -256,17 +282,123 @@ export function TemplateEditor() {
     setDraft((d) => ({ ...d, logoUrl: url }));
   };
 
-  const previewGenerate = async () => {
-    setGenerating(true);
-    setPreviewUrl(null);
-    try {
-      await new Promise((r) => setTimeout(r, 500));
-      const url = await compositePreviewMock(draft, 360, 640);
-      setPreviewUrl(url);
-    } finally {
-      setGenerating(false);
+  useEffect(() => {
+    if (!showResultModal) return;
+    const onKey = (e) => { if (e.key === 'Escape') setShowResultModal(false); };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [showResultModal]);
+
+  // Keep refs in sync so snap() can read current values without stale closures
+  useEffect(() => { basePromptRef.current = basePrompt; }, [basePrompt]);
+  useEffect(() => { peoplePromptsRef.current = peoplePrompts; }, [peoplePrompts]);
+  useEffect(() => { numberOfPeopleRef.current = numberOfPeople; }, [numberOfPeople]);
+  useEffect(() => { draftRef.current = draft; }, [draft]);
+
+  // Live idle preview: re-render whenever draft settings change
+  useEffect(() => {
+    if (previewPhase !== 'idle') {
+      setIdlePreviewUrl(null);
+      return;
     }
-  };
+    let cancelled = false;
+    compositePreviewMock(draft, 540, 960).then(url => {
+      if (!cancelled) setIdlePreviewUrl(url);
+    }).catch(() => {});
+    return () => { cancelled = true; };
+  }, [draft, previewPhase]);
+
+  // Start/stop camera when entering/leaving camera phase
+  useEffect(() => {
+    if (previewPhase !== 'camera') return;
+    let cancelled = false;
+    setCamReady(false);
+    (async () => {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: 'user', width: { ideal: 1080 }, height: { ideal: 1320 } },
+          audio: false,
+        });
+        if (cancelled) { stream.getTracks().forEach(t => t.stop()); return; }
+        camStreamRef.current = stream;
+        if (camVideoRef.current) {
+          camVideoRef.current.srcObject = stream;
+          await camVideoRef.current.play();
+          if (!cancelled) setCamReady(true);
+        }
+      } catch {
+        if (!cancelled) { setPreviewError('Camera unavailable.'); setPreviewPhase('result'); }
+      }
+    })();
+    return () => {
+      cancelled = true;
+      camStreamRef.current?.getTracks().forEach(t => t.stop());
+      camStreamRef.current = null;
+      setCamReady(false);
+      setCamCount(0);
+    };
+  }, [previewPhase]);
+
+  // Countdown tick
+  const snap = useCallback(() => {
+    const video = camVideoRef.current;
+    if (!video || !video.videoWidth) return;
+    const outW = 1080, outH = 1320;
+    const canvas = document.createElement('canvas');
+    canvas.width = outW; canvas.height = outH;
+    const ctx = canvas.getContext('2d', { alpha: false });
+    ctx.fillStyle = '#000'; ctx.fillRect(0, 0, outW, outH);
+    const vw = video.videoWidth, vh = video.videoHeight;
+    const scale = Math.max(outW / vw, outH / vh);
+    const dw = vw * scale, dh = vh * scale;
+    ctx.drawImage(video, 0, 0, vw, vh, (outW - dw) / 2, (outH - dh) / 2, dw, dh);
+    const dataUrl = canvas.toDataURL('image/jpeg', 0.92);
+    camStreamRef.current?.getTracks().forEach(t => t.stop());
+    camStreamRef.current = null;
+
+    const combined = [basePromptRef.current, peoplePromptsRef.current[numberOfPeopleRef.current]]
+      .map(s => (s || '').trim()).filter(Boolean).join(' ');
+
+    setPreviewPhase('processing');
+    setPreviewError(null);
+    setResultDataUrl(null);
+
+    previewImageApi(dataUrl, combined, undefined).then(async res => {
+      if (res.ok && res.data?.output_image_base64) {
+        const rawUrl = `data:image/jpeg;base64,${res.data.output_image_base64}`;
+        try {
+          const composited = await compositeResultPreview(rawUrl, draftRef.current);
+          setResultDataUrl(composited);
+        } catch {
+          setResultDataUrl(rawUrl);
+        }
+        setPreviewError(null);
+      } else {
+        setPreviewError(res.error || 'Generation failed.');
+      }
+      setPreviewPhase('result');
+    }).catch(() => {
+      setPreviewError('Request failed.');
+      setPreviewPhase('result');
+    });
+  }, []);
+
+  useEffect(() => {
+    if (camCount <= 0) return undefined;
+    const myId = camCountRunRef.current;
+    const id = setTimeout(() => {
+      if (myId !== camCountRunRef.current) return;
+      if (camCount > 1) { setCamCount(c => c - 1); }
+      else { setCamCount(0); snap(); }
+    }, 1000);
+    return () => clearTimeout(id);
+  }, [camCount, snap]);
+
+  const startCountdown = useCallback(() => {
+    if (!camReady || camCount > 0) return;
+    camCountRunRef.current += 1;
+    setCamCount(3);
+  }, [camReady, camCount]);
 
   const pctFromEvent = useCallback((clientX, clientY) => {
     const el = stageRef.current;
@@ -365,13 +497,6 @@ export function TemplateEditor() {
     setAdminRoute('templates');
   };
 
-  const bgStyle = draft.backgroundUrl
-    ? { backgroundImage: `url(${draft.backgroundUrl})` }
-    : {};
-
-  const min = draft.previewClass || 'tpl-preview--thrones';
-
-
   return (
     <div className="template-editor-page">
       <div className="admin-page-head template-editor-page__head">
@@ -399,81 +524,106 @@ export function TemplateEditor() {
       ) : (
         <div className="editor-split template-editor-page__split">
           <div className="preview-stage-wrap preview-stage-wrap--editor">
-          <div ref={stageRef} className="preview-stage preview-stage--compact" style={{ position: 'relative' }}>
-            {previewUrl ? (
-              <img src={previewUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-            ) : (
-              <>
-                <div
-                  className={`preview-stage-inner ${draft.backgroundUrl ? '' : min}`}
-                  style={{
-                    ...bgStyle,
-                    backgroundSize: 'cover',
-                    backgroundPosition: 'center',
-                  }}
+            <div ref={stageRef} className="preview-stage preview-stage--compact" style={{ position: 'relative', overflow: 'hidden' }}>
+              {previewPhase === 'idle' && (
+                idlePreviewUrl ? (
+                  <img
+                    src={idlePreviewUrl}
+                    alt="Template preview"
+                    style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
+                  />
+                ) : (
+                  <div style={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 12, background: '#1a1a1a', color: '#777' }}>
+                    <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                      <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
+                      <circle cx="12" cy="13" r="4"/>
+                    </svg>
+                    <span style={{ fontSize: 12, textAlign: 'center', padding: '0 20px', lineHeight: 1.5 }}>Click "Preview generate"<br/>to test your prompts</span>
+                  </div>
+                )
+              )}
+
+              {previewPhase === 'camera' && (
+                <>
+                  <video ref={camVideoRef} playsInline muted disablePictureInPicture style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} aria-hidden />
+                  {!camReady && (
+                    <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#111', color: '#888', fontSize: 13 }}>
+                      Starting camera…
+                    </div>
+                  )}
+                  {camCount > 0 && (
+                    <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,.5)', pointerEvents: 'none' }}>
+                      <span style={{ fontSize: 96, fontWeight: 900, color: '#fff', lineHeight: 1 }}>{camCount}</span>
+                    </div>
+                  )}
+                </>
+              )}
+
+              {previewPhase === 'processing' && (
+                <div style={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 14, background: '#111' }}>
+                  <style>{`@keyframes tpl-spin{to{transform:rotate(360deg)}}`}</style>
+                  <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#888" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ animation: 'tpl-spin 1s linear infinite' }} aria-hidden>
+                    <path d="M21 12a9 9 0 1 1-6.219-8.56"/>
+                  </svg>
+                  <span style={{ fontSize: 13, color: '#888' }}>Generating…</span>
+                </div>
+              )}
+
+              {previewPhase === 'result' && resultDataUrl && (
+                <img
+                  src={resultDataUrl}
+                  alt="Preview result"
+                  onClick={() => setShowResultModal(true)}
+                  style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block', cursor: 'zoom-in' }}
                 />
-                {draft.overlayText ? (
-                  <div
-                    role="presentation"
-                    className="drag-overlay"
-                    style={{
-                      left: `${draft.textX}%`,
-                      top: `${draft.textY}%`,
-                      transform: 'translate(-50%, -50%)',
-                      fontFamily: draft.fontFamily,
-                      fontSize: `clamp(10px, ${draft.fontSize * 0.28}px, 32px)`,
-                      color: draft.textColor,
-                    }}
-                    onPointerDown={(e) => {
-                      e.preventDefault();
-                      dragRef.current = 'text';
-                    }}
-                  >
-                    {draft.overlayText}
-                  </div>
-                ) : null}
-                {draft.logoUrl ? (
-                  <div
-                    className="logo-drag"
-                    style={{
-                      left: `${draft.logoX}%`,
-                      top: `${draft.logoY}%`,
-                      transform: 'translate(-50%, -50%)',
-                      width: `${draft.logoScale * 100}%`,
-                      maxWidth: '45%',
-                      aspectRatio: '1',
-                    }}
-                    onPointerDown={(e) => {
-                      if (e.target.dataset.handle === 'resize') return;
-                      e.preventDefault();
-                      dragRef.current = 'logo';
-                    }}
-                  >
-                    <img src={draft.logoUrl} alt="" />
-                    <div
-                      data-handle="resize"
-                      className="logo-drag__handle"
-                      onPointerDown={(e) => {
-                        e.stopPropagation();
-                        e.preventDefault();
-                        dragRef.current = 'resize';
-                      }}
-                    />
-                  </div>
-                ) : null}
-              </>
+              )}
+
+              {previewPhase === 'result' && !resultDataUrl && previewError && (
+                <div style={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 8, padding: '0 20px', background: '#111' }}>
+                  <span style={{ color: '#f87171', fontSize: 13, textAlign: 'center', lineHeight: 1.5 }}>{previewError}</span>
+                </div>
+              )}
+            </div>
+
+            {previewPhase === 'camera' ? (
+              <div style={{ display: 'flex', gap: 8 }}>
+                <button
+                  type="button"
+                  className="btn btn-primary template-editor-page__preview-btn"
+                  onClick={startCountdown}
+                  disabled={!camReady || camCount > 0}
+                >
+                  {camCount > 0 ? `Hold still… ${camCount}` : 'Take photo'}
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-ghost"
+                  style={{ flexShrink: 0 }}
+                  onClick={() => { camCountRunRef.current += 1; setPreviewPhase('idle'); }}
+                >
+                  Cancel
+                </button>
+              </div>
+            ) : previewPhase === 'result' ? (
+              <button
+                type="button"
+                className="btn btn-primary template-editor-page__preview-btn"
+                onClick={() => { setResultDataUrl(null); setPreviewError(null); setPreviewPhase('camera'); }}
+              >
+                Retry
+              </button>
+            ) : (
+              <button
+                type="button"
+                className="btn btn-primary template-editor-page__preview-btn"
+                onClick={() => setPreviewPhase('camera')}
+                disabled={previewPhase === 'processing'}
+              >
+                {previewPhase === 'processing' ? 'Processing…' : 'Preview generate'}
+              </button>
             )}
+            <p className="template-editor-page__preview-hint">Opens camera to capture a test photo, then sends to the AI.</p>
           </div>
-          <button
-            type="button"
-            className="btn btn-primary template-editor-page__preview-btn"
-            onClick={previewGenerate}
-            disabled={generating}
-          >
-            {generating ? 'Generating…' : 'Preview generate'}
-          </button>
-          <p className="template-editor-page__preview-hint">Mock layout preview — connect your inference API for real output.</p>
-        </div>
 
         <div className="editor-scroll panel template-editor-page__form template-editor-form">
           <section className="editor-card gen-settings-card">
@@ -730,6 +880,30 @@ export function TemplateEditor() {
           </section>
         </div>
       </div>
+      )}
+
+      {showResultModal && resultDataUrl && (
+        <div
+          onClick={() => setShowResultModal(false)}
+          style={{
+            position: 'fixed', inset: 0, zIndex: 9999,
+            background: 'rgba(0,0,0,0.93)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            cursor: 'zoom-out',
+          }}
+        >
+          <img
+            src={resultDataUrl}
+            alt="Generated preview"
+            style={{
+              maxWidth: '90vw',
+              maxHeight: '95vh',
+              objectFit: 'contain',
+              borderRadius: 8,
+              display: 'block',
+            }}
+          />
+        </div>
       )}
     </div>
   );

@@ -5,6 +5,7 @@ contextBridge.exposeInMainWorld('catherine', {
   api: {
     request: (method, url, payload) => ipcRenderer.invoke('api-request', { method, url, payload }),
     generate: (url, imageBase64, templateId, eventId, seed) => ipcRenderer.invoke('api-generate', { url, imageBase64, templateId, eventId, seed }),
+    previewImage: (imageBase64, prompt, seed) => ipcRenderer.invoke('api-preview-image', { imageBase64, prompt, seed }),
   },
   gmail: {
     getStatus: () => ipcRenderer.invoke('gmail-auth-status'),

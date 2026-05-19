@@ -1,5 +1,6 @@
 import React, { useEffect, useRef } from 'react';
 import { generateImage } from '../utils/api.js';
+import { compositeResultPreview } from '../utils/composite.js';
 import processingVideoUrl from './processingVideoMedia.js';
 
 export function ProcessingScreen({ subjectDataUrl, template, eventId, onDone }) {
@@ -25,17 +26,21 @@ export function ProcessingScreen({ subjectDataUrl, template, eventId, onDone }) 
       if (!alive) return;
 
       if (result.ok && result.data?.output_image_base64) {
-        // API returned a base64 image — prefix it as a data URL
         const base64 = result.data.output_image_base64;
-        const finalUrl = base64.startsWith('data:')
+        const rawUrl = base64.startsWith('data:')
           ? base64
           : `data:image/png;base64,${base64}`;
-        
-        // Stop the looping video cleanly
+
+        let finalUrl = rawUrl;
+        try {
+          finalUrl = await compositeResultPreview(rawUrl, template, 1080, 1320);
+        } catch {
+          finalUrl = rawUrl;
+        }
+
         if (video) { video.loop = false; video.pause(); }
         onDone(finalUrl);
       } else {
-        // On error, fall back to the raw captured photo
         console.error('[ProcessingScreen] generate failed:', result.error);
         if (video) { video.loop = false; video.pause(); }
         onDone(subjectDataUrl);

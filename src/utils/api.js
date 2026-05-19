@@ -97,3 +97,17 @@ export async function generateImage(imageBase64, templateId, eventId, seed) {
     return { ok: false, error: err?.message || 'Unexpected error calling /generate.' };
   }
 }
+
+export async function previewImageApi(imageBase64, prompt, seed) {
+  const bridge = window?.catherine?.api;
+  if (!bridge) return { ok: false, error: 'API bridge not available.' };
+  try {
+    const res = await bridge.previewImage(imageBase64, prompt, seed ?? null);
+    if (res.status < 200 || res.status >= 300) {
+      return { ok: false, error: res.body?.detail || `HTTP ${res.status}` };
+    }
+    return { ok: true, data: res.body };
+  } catch (err) {
+    return { ok: false, error: err?.message || 'Request failed.' };
+  }
+}

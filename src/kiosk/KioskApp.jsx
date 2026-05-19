@@ -36,7 +36,22 @@ export function KioskApp() {
         if (Array.isArray(resTemplates.data)) templatesArray = resTemplates.data;
         else if (resTemplates.data && Array.isArray(resTemplates.data.data)) templatesArray = resTemplates.data.data;
         else if (resTemplates.data && Array.isArray(resTemplates.data.templates)) templatesArray = resTemplates.data.templates;
-        setDbTemplates(templatesArray.map(t => ({ ...t, id: t.templateId || t.id, backgroundUrl: t.backgroundUrl || t.templateImageUrl || null })));
+        setDbTemplates(templatesArray.map(t => {
+          const mapped = {
+            ...t,
+            id: t.templateId || t.id,
+            backgroundUrl: t.backgroundUrl || t.templateImageUrl || null,
+          };
+          if (t.textPosition) {
+            mapped.textX = Number(t.textPosition.x ?? 50);
+            mapped.textY = Number(t.textPosition.y ?? 78);
+          }
+          if (t.logoPosition) {
+            mapped.logoX = Number(t.logoPosition.x ?? 88);
+            mapped.logoY = Number(t.logoPosition.y ?? 10);
+          }
+          return mapped;
+        }));
       }
       
       if (resEvents.ok) {

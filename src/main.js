@@ -171,6 +171,69 @@ ipcMain.handle('api-generate', async (_event, { url, imageBase64, templateId, ev
   });
 });
 
+/* ---- Multipart POST for /preview-image ---- */
+
+ipcMain.handle('api-preview-image', async (_event, { imageBase64, prompt, seed }) => {
+  return new Promise((resolve, reject) => {
+    const base64Data = imageBase64.replace(/^data:image\/\w+;base64,/, '');
+    const imageBuffer = Buffer.from(base64Data, 'base64');
+    const boundary = `----FormBoundary${Date.now().toString(16)}`;
+    const CRLF = '\r\n';
+
+    const imagePartHeader = Buffer.from(
+      `--${boundary}${CRLF}` +
+      `Content-Disposition: form-data; name="image"; filename="capture.jpg"${CRLF}` +
+      `Content-Type: image/jpeg${CRLF}${CRLF}`,
+      'utf8'
+    );
+    const imagePartFooter = Buffer.from(CRLF, 'utf8');
+
+    const promptPart = Buffer.from(
+      `--${boundary}${CRLF}` +
+      `Content-Disposition: form-data; name="prompt"${CRLF}${CRLF}` +
+      `${prompt}${CRLF}`,
+      'utf8'
+    );
+
+    let seedPart = Buffer.alloc(0);
+    if (seed !== undefined && seed !== null && seed !== '') {
+      seedPart = Buffer.from(
+        `--${boundary}${CRLF}` +
+        `Content-Disposition: form-data; name="seed"${CRLF}${CRLF}` +
+        `${Number(seed)}${CRLF}`,
+        'utf8'
+      );
+    }
+
+    const closingBoundary = Buffer.from(`--${boundary}--${CRLF}`, 'utf8');
+    const bodyBuffer = Buffer.concat([imagePartHeader, imageBuffer, imagePartFooter, promptPart, seedPart, closingBoundary]);
+
+    const options = {
+      hostname: '127.0.0.1',
+      port: 8000,
+      path: '/preview-image',
+      method: 'POST',
+      headers: {
+        'Content-Type': `multipart/form-data; boundary=${boundary}`,
+        'Content-Length': bodyBuffer.length,
+      },
+    };
+
+    const req = http.request(options, (res) => {
+      const chunks = [];
+      res.on('data', (chunk) => chunks.push(chunk));
+      res.on('end', () => {
+        const raw = Buffer.concat(chunks).toString('utf8');
+        try { resolve({ status: res.statusCode, body: JSON.parse(raw) }); }
+        catch { resolve({ status: res.statusCode, body: raw }); }
+      });
+    });
+    req.on('error', reject);
+    req.write(bodyBuffer);
+    req.end();
+  });
+});
+
 /* ---- Job photo storage (per-event folders under userData/jobs/<eventId>) ---- */
 
 const SAFE_ID_RE = /^[A-Za-z0-9_-]+$/;
@@ -438,87 +501,132 @@ ipcMain.handle('open-gallery', async (_event, { eventId, eventName = 'Gallery' }
 <title>${safeTitle} — Gallery</title>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
-body{background:#f7f7f5;color:#1a1a1a;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;min-height:100vh}
-/* ── Top bar ── */
-.topbar{background:#fff;border-bottom:1px solid #e8e8e5;padding:0 28px;height:52px;display:flex;align-items:center;position:sticky;top:0;z-index:20}
-.breadcrumb{display:flex;align-items:center;gap:6px;font-size:13px;color:#888}
-.breadcrumb span{color:#1a1a1a;font-weight:500}
-.breadcrumb .sep{color:#ccc}
-/* ── Page body ── */
-.page{max-width:1200px;margin:0 auto;padding:32px 28px 60px}
-.page-title{font-size:26px;font-weight:700;letter-spacing:-.3px;color:#111;margin-bottom:28px}
-/* ── Section header ── */
-.section-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px}
-.section-label{font-size:13px;font-weight:600;color:#555;text-transform:uppercase;letter-spacing:.06em}
-.sort-wrap{display:flex;align-items:center;gap:6px}
-.sort-label{font-size:13px;color:#888}
-select{font-size:13px;color:#333;border:1px solid #ddd;border-radius:6px;padding:5px 28px 5px 10px;background:#fff url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%23999'/%3E%3C/svg%3E") no-repeat right 10px center;appearance:none;cursor:pointer;outline:none}
-select:hover{border-color:#bbb}
-/* ── Grid ── */
-#grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:16px}
-.card{background:#fff;border-radius:10px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,.07),0 0 0 1px rgba(0,0,0,.04);cursor:pointer;transition:box-shadow .18s,transform .18s}
-.card:hover{box-shadow:0 4px 16px rgba(0,0,0,.12),0 0 0 1px rgba(0,0,0,.06);transform:translateY(-2px)}
-.card-thumb{width:100%;aspect-ratio:1;overflow:hidden;background:#f0eeeb;display:block;position:relative}
-.card-thumb img{width:100%;height:100%;object-fit:cover;display:block;opacity:0;transition:opacity .25s}
-.card-thumb img.rdy{opacity:1}
-.card-foot{padding:10px 12px;display:flex;align-items:center;justify-content:space-between;gap:8px}
-.card-name{font-size:12px;color:#555;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex:1}
-.card-menu{width:24px;height:24px;border:none;background:none;cursor:pointer;border-radius:5px;display:flex;align-items:center;justify-content:center;color:#aaa;flex-shrink:0;transition:background .15s,color .15s}
-.card-menu:hover{background:#f0eeeb;color:#555}
-/* context menu */
-.ctx{position:fixed;background:#fff;border:1px solid #e0e0dc;border-radius:8px;box-shadow:0 8px 24px rgba(0,0,0,.13);z-index:50;min-width:148px;padding:4px 0;display:none}
+body{background:#ede8df;color:#1a1a1a;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;min-height:100vh}
+
+.page{padding:48px 56px 72px}
+
+/* ── Gradient title (matches "A LOOK" kiosk headline) ── */
+.ev-title{
+  display:inline-block;
+  font-size:48px;font-weight:900;letter-spacing:-2px;line-height:1;
+  background:linear-gradient(100deg,#f5a623 0%,#ff8a2a 18%,#f5a623 32%,#b89a36 60%,#4f9d56 92%,#1f8f6e 110%);
+  -webkit-background-clip:text;background-clip:text;
+  color:transparent;-webkit-text-fill-color:transparent;
+  position:relative;margin-bottom:10px;
+}
+/* Sparkle cluster — positioned relative to title wrapper */
+.title-wrap{position:relative;display:inline-block;margin-bottom:10px}
+.sparkle-cluster{position:absolute;top:-10px;right:-48px;pointer-events:none}
+.sp-star{position:absolute;animation:twinkle 2.6s ease-in-out infinite}
+.sp-star svg{display:block}
+.sp-a{top:0;left:0;animation-delay:0s}
+.sp-b{top:16px;left:20px;animation-delay:.55s}
+.sp-c{top:28px;left:8px;animation-delay:1.1s}
+@keyframes twinkle{0%,100%{opacity:.25;transform:scale(.7) rotate(0deg)}50%{opacity:1;transform:scale(1) rotate(15deg)}}
+
+.ev-sub{font-size:15px;color:#8a8278;margin-bottom:36px;font-weight:400}
+
+/* ── Gallery label ── */
+.gallery-lbl{
+  display:inline-block;
+  font-size:13px;font-weight:800;letter-spacing:.15em;
+  text-transform:uppercase;color:#111;
+  padding-bottom:7px;
+  margin-bottom:22px;
+  position:relative;
+}
+.gallery-lbl::after{
+  content:'';position:absolute;bottom:0;left:0;right:0;height:2.5px;
+  background:linear-gradient(to right,#E8671F 50%,#2D6A00 50%);
+  border-radius:2px;
+}
+
+/* ── Grid: 4 columns ── */
+#grid{
+  display:grid;
+  grid-template-columns:repeat(4,1fr);
+  gap:20px;
+}
+
+/* ── Card with photo ── */
+.card{
+  border:1.5px solid rgba(232,103,31,.55);
+  border-radius:20px;
+  overflow:hidden;
+  cursor:pointer;
+  background:#e8e2da;
+  aspect-ratio:1080/1320;
+  transition:transform .2s,box-shadow .2s;
+  box-shadow:
+    0 0 0 3px rgba(245,166,35,.18),
+    0 4px 18px rgba(232,103,31,.22),
+    0 0 40px rgba(245,166,35,.10);
+  position:relative;
+}
+.card:hover{
+  transform:translateY(-4px);
+  box-shadow:
+    0 0 0 3px rgba(245,166,35,.32),
+    0 10px 32px rgba(232,103,31,.32),
+    0 0 60px rgba(245,166,35,.18);
+}
+.card img{
+  width:100%;height:100%;
+  object-fit:cover;display:block;
+  opacity:0;transition:opacity .28s;
+}
+.card img.rdy{opacity:1}
+
+/* ── Context menu ── */
+.ctx{position:fixed;background:#fff;border:1px solid #e8e0d6;border-radius:10px;box-shadow:0 8px 24px rgba(0,0,0,.13);z-index:50;min-width:148px;padding:4px 0;display:none}
 .ctx.show{display:block}
-.ctx button{display:block;width:100%;padding:8px 14px;background:none;border:none;text-align:left;font-size:13px;color:#333;cursor:pointer}
-.ctx button:hover{background:#f5f4f1}
-/* ── Empty ── */
-#empty{text-align:center;padding:100px 24px;color:#aaa;font-size:15px;display:none}
+.ctx button{display:block;width:100%;padding:9px 16px;background:none;border:none;text-align:left;font-size:13px;color:#333;cursor:pointer}
+.ctx button:hover{background:#fdf5ef}
+
+/* ── Empty state ── */
+#empty{padding:60px 0;color:#b0a498;font-size:15px;display:none}
+
 /* ── Lightbox ── */
-#lb{position:fixed;inset:0;background:rgba(0,0,0,.92);z-index:100;display:flex;align-items:center;justify-content:center}
+#lb{position:fixed;inset:0;background:rgba(8,5,2,.94);z-index:100;display:flex;align-items:center;justify-content:center}
 #lb.off{display:none}
-#lb-img{max-width:calc(100vw - 140px);max-height:calc(100vh - 80px);object-fit:contain;border-radius:6px;box-shadow:0 24px 80px rgba(0,0,0,.6);opacity:0;transition:opacity .2s}
+#lb-img{max-width:calc(100vw - 140px);max-height:calc(100vh - 80px);object-fit:contain;border-radius:10px;box-shadow:0 24px 80px rgba(0,0,0,.7);opacity:0;transition:opacity .22s}
 #lb-img.rdy{opacity:1}
-.lb-nav{position:fixed;top:50%;transform:translateY(-50%);background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.15);color:#fff;cursor:pointer;border-radius:10px;width:44px;height:72px;font-size:28px;display:flex;align-items:center;justify-content:center;transition:background .15s}
-.lb-nav:hover{background:rgba(255,255,255,.2)}
+.lb-nav{position:fixed;top:50%;transform:translateY(-50%);background:rgba(255,255,255,.09);border:1px solid rgba(255,255,255,.14);color:#fff;cursor:pointer;border-radius:10px;width:44px;height:72px;font-size:30px;display:flex;align-items:center;justify-content:center;transition:background .15s}
+.lb-nav:hover{background:rgba(255,255,255,.18)}
 #lb-prev{left:12px}
 #lb-next{right:12px}
-#lb-close{position:fixed;top:16px;right:18px;width:36px;height:36px;background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.15);color:#fff;cursor:pointer;border-radius:8px;font-size:18px;display:flex;align-items:center;justify-content:center;transition:background .15s}
+#lb-close{position:fixed;top:16px;right:18px;width:36px;height:36px;background:rgba(255,255,255,.09);border:1px solid rgba(255,255,255,.14);color:#fff;cursor:pointer;border-radius:8px;font-size:18px;display:flex;align-items:center;justify-content:center;transition:background .15s}
 #lb-close:hover{background:rgba(255,255,255,.2)}
-#lb-foot{position:fixed;bottom:18px;left:50%;transform:translateX(-50%);font-size:12px;color:rgba(255,255,255,.4);pointer-events:none;white-space:nowrap}
-#lb-spin{position:absolute;width:28px;height:28px;border:3px solid rgba(255,255,255,.15);border-top-color:rgba(255,255,255,.7);border-radius:50%;animation:spin .65s linear infinite;display:none}
+#lb-foot{position:fixed;bottom:18px;left:50%;transform:translateX(-50%);font-size:12px;color:rgba(255,255,255,.35);pointer-events:none;white-space:nowrap}
+#lb-spin{position:absolute;width:28px;height:28px;border:3px solid rgba(255,255,255,.12);border-top-color:rgba(255,255,255,.75);border-radius:50%;animation:spin .65s linear infinite;display:none}
 @keyframes spin{to{transform:rotate(360deg)}}
 </style>
 </head>
 <body>
-<div class="topbar">
-  <nav class="breadcrumb">
-    <span>Events</span>
-    <span class="sep">›</span>
-    <span>${safeTitle}</span>
-    <span class="sep">›</span>
-    <span>Gallery</span>
-  </nav>
-</div>
-
 <div class="page">
-  <h1 class="page-title">${safeTitle}</h1>
 
-  <div class="section-head">
-    <span class="section-label">Gallery</span>
-    <div class="sort-wrap">
-      <span class="sort-label">Sort:</span>
-      <select id="sort-sel">
-        <option value="newest">Newest first</option>
-        <option value="oldest">Oldest first</option>
-        <option value="name">Name A–Z</option>
-      </select>
+  <!-- Title -->
+  <div style="margin-bottom:8px">
+    <div class="title-wrap">
+      <div class="ev-title">${safeTitle}</div>
+      <div class="sparkle-cluster">
+        <div class="sp-star sp-a"><svg width="18" height="18" viewBox="0 0 24 24"><path d="M12 0 L13.6 9.4 L24 12 L13.6 14.6 L12 24 L10.4 14.6 L0 12 L10.4 9.4 Z" fill="#f5a623"/></svg></div>
+        <div class="sp-star sp-b"><svg width="12" height="12" viewBox="0 0 24 24"><path d="M12 0 L13.6 9.4 L24 12 L13.6 14.6 L12 24 L10.4 14.6 L0 12 L10.4 9.4 Z" fill="#b89a36"/></svg></div>
+        <div class="sp-star sp-c"><svg width="9" height="9" viewBox="0 0 24 24"><path d="M12 0 L13.6 9.4 L24 12 L13.6 14.6 L12 24 L10.4 14.6 L0 12 L10.4 9.4 Z" fill="#4f9d56"/></svg></div>
+      </div>
     </div>
   </div>
+  <p class="ev-sub">Relive the moments that matter.</p>
 
+  <!-- Gallery label -->
+  <div class="gallery-lbl">Gallery</div>
+
+  <!-- Grid -->
   <div id="grid"></div>
   <div id="empty">No photos found for this event.</div>
 </div>
 
-<!-- Context menu -->
+<!-- Right-click / long-press context menu -->
 <div class="ctx" id="ctx">
   <button id="ctx-dl">Download photo</button>
 </div>
@@ -527,17 +635,16 @@ select:hover{border-color:#bbb}
 <div id="lb" class="off">
   <div id="lb-spin"></div>
   <button id="lb-close" title="Close (Esc)">&#10005;</button>
-  <button class="lb-nav" id="lb-prev" title="Previous (←)">&#8249;</button>
+  <button class="lb-nav" id="lb-prev">&#8249;</button>
   <img id="lb-img" alt="">
-  <button class="lb-nav" id="lb-next" title="Next (→)">&#8250;</button>
+  <button class="lb-nav" id="lb-next">&#8250;</button>
   <div id="lb-foot"></div>
 </div>
 
 <script>
 const RAW=${imagesJson};
-let IMAGES=[...RAW];
-let cur=0;
-let ctxIdx=-1;
+let IMAGES=[...RAW].sort((a,b)=>new Date(b.createdAt||0)-new Date(a.createdAt||0));
+let cur=0,ctxIdx=-1;
 
 const grid=document.getElementById('grid');
 const lb=document.getElementById('lb');
@@ -546,51 +653,32 @@ const lbFoot=document.getElementById('lb-foot');
 const lbSpin=document.getElementById('lb-spin');
 const ctx=document.getElementById('ctx');
 
-function sortImages(order){
-  if(order==='newest') IMAGES=[...RAW].sort((a,b)=>new Date(b.createdAt||0)-new Date(a.createdAt||0));
-  else if(order==='oldest') IMAGES=[...RAW].sort((a,b)=>new Date(a.createdAt||0)-new Date(b.createdAt||0));
-  else IMAGES=[...RAW].sort((a,b)=>a.filename.localeCompare(b.filename));
-  renderGrid();
-}
-
 function renderGrid(){
   grid.innerHTML='';
-  if(!IMAGES.length){document.getElementById('empty').style.display='block';return;}
-  document.getElementById('empty').style.display='none';
+  document.getElementById('empty').style.display=IMAGES.length?'none':'block';
   IMAGES.forEach((img,i)=>{
-    const card=document.createElement('div');card.className='card';
-    const thumb=document.createElement('div');thumb.className='card-thumb';
+    const card=document.createElement('div');
+    card.className='card';
     const el=document.createElement('img');
     el.loading='lazy';el.alt=img.filename;el.src=img.src;
     el.onload=()=>el.classList.add('rdy');
-    thumb.appendChild(el);
-    const foot=document.createElement('div');foot.className='card-foot';
-    const name=document.createElement('span');name.className='card-name';name.textContent=img.filename;
-    const menu=document.createElement('button');menu.className='card-menu';menu.title='Options';
-    menu.innerHTML='<svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><circle cx="8" cy="2" r="1.5"/><circle cx="8" cy="8" r="1.5"/><circle cx="8" cy="14" r="1.5"/></svg>';
-    menu.addEventListener('click',e=>{e.stopPropagation();openCtx(e,i)});
-    foot.appendChild(name);foot.appendChild(menu);
-    card.appendChild(thumb);card.appendChild(foot);
+    card.appendChild(el);
     card.addEventListener('click',()=>openLB(i));
+    card.addEventListener('contextmenu',e=>{e.preventDefault();openCtx(e,i);});
     grid.appendChild(card);
   });
 }
 
 function openCtx(e,i){
-  ctxIdx=i;
-  ctx.classList.add('show');
-  const x=Math.min(e.clientX,window.innerWidth-160);
-  const y=Math.min(e.clientY,window.innerHeight-80);
-  ctx.style.left=x+'px';ctx.style.top=y+'px';
+  ctxIdx=i;ctx.classList.add('show');
+  ctx.style.left=Math.min(e.clientX,window.innerWidth-160)+'px';
+  ctx.style.top=Math.min(e.clientY,window.innerHeight-80)+'px';
 }
 function closeCtx(){ctx.classList.remove('show');ctxIdx=-1;}
 document.addEventListener('click',()=>closeCtx());
 ctx.addEventListener('click',e=>e.stopPropagation());
-
 document.getElementById('ctx-dl').addEventListener('click',()=>{
-  if(ctxIdx<0)return;
-  downloadImg(IMAGES[ctxIdx]);
-  closeCtx();
+  if(ctxIdx>=0){downloadImg(IMAGES[ctxIdx]);closeCtx();}
 });
 
 async function downloadImg(img){
@@ -630,8 +718,7 @@ document.addEventListener('keydown',e=>{
   if(e.key==='ArrowRight')next();
 });
 
-document.getElementById('sort-sel').addEventListener('change',e=>sortImages(e.target.value));
-sortImages('newest');
+renderGrid();
 </script>
 </body>
 </html>`;
@@ -641,7 +728,7 @@ sortImages('newest');
     height: 860,
     minWidth: 800,
     minHeight: 600,
-    backgroundColor: '#f7f7f5',
+    backgroundColor: '#ede8df',
     title: `${eventName} — Gallery`,
     webPreferences: {
       sandbox: false,

@@ -20,9 +20,9 @@ export function CameraScreen({ onCapture, onBack }) {
         const stream = await navigator.mediaDevices.getUserMedia({
           video: {
             facingMode: 'user',
-            width: { ideal: 1080 },
-            height: { ideal: 1320 },
-            aspectRatio: { ideal: 1080 / 1320 },
+            width: { ideal: 1620 },
+            height: { ideal: 1080 },
+            aspectRatio: { ideal: 1620 / 1080 },
           },
           audio: false,
         });
@@ -88,8 +88,8 @@ export function CameraScreen({ onCapture, onBack }) {
     if (!video || !video.videoWidth || !streamReady) return;
     const vw = video.videoWidth;
     const vh = video.videoHeight;
-    const outW = 1080;
-    const outH = 1320;
+    const outW = 1620;
+    const outH = 1080;
     const canvas = document.createElement('canvas');
     canvas.width = outW;
     canvas.height = outH;

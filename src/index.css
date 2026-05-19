@@ -473,7 +473,7 @@ select {
 }
 
 .card-grid--events {
-  grid-template-columns: repeat(auto-fill, minmax(280px, 380px));
+  grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
   justify-content: start;
 }
 
@@ -2428,6 +2428,16 @@ select {
     0 0 160px rgba(0, 0, 0, 0.28) inset;
 }
 
+/* Camera: landscape 1620×1080 frame — overrides the default portrait ratio */
+.camera-screen .kiosk-portrait-frame.kiosk-flow-frame {
+  --frame-max-w: min(96vw, calc((100dvh - 120px) * 1620 / 1080));
+  width: var(--frame-max-w);
+  height: calc(var(--frame-max-w) * 1080 / 1620);
+  aspect-ratio: 1620 / 1080;
+  max-height: calc(100dvh - 120px);
+  max-width: 96vw;
+}
+
 /* Processing: frame with white background around the video */
 .kiosk-portrait-frame--processing {
   background: #fff;
@@ -3234,60 +3244,170 @@ select {
 }
 
 
-/* --- Event card --- */
-.event-card {
-  border: 1px solid rgba(61, 43, 86, 0.08);
+/* ── New event card ── */
+.ev-card {
+  background: #fff;
+  border: 1px solid #e8e5ee;
+  border-radius: 12px;
+  padding: 20px 20px 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  box-shadow: 0 1px 4px rgba(61,43,86,.06);
 }
 
-.event-card__divider {
-  height: 1px;
-  background: rgba(61, 43, 86, 0.08);
-  margin: 2px 0;
+.ev-card__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 4px;
 }
 
-.event-card__actions {
-  margin-top: 2px;
+.ev-card__name {
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: var(--ink);
+  margin: 0;
+  line-height: 1.3;
+  flex: 1;
+  min-width: 0;
 }
 
-.event-card__path {
-  font-size: 0.75rem;
+/* Go Live / On kiosk badges */
+.ev-badge {
+  flex-shrink: 0;
+  border: none;
+  border-radius: 20px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: .02em;
+  padding: 5px 13px;
+  cursor: pointer;
+  transition: opacity .15s;
+  white-space: nowrap;
+}
+.ev-badge:hover { opacity: .85; }
+
+.ev-badge--go {
+  background: #F59E0B;
+  color: #fff;
+}
+
+.ev-badge--live {
+  background: #4d7c0f;
+  color: #fff;
+}
+
+.ev-card__date {
+  font-size: 0.8rem;
   color: var(--ink-muted);
-  margin: -4px 0 0;
+  margin: 0 0 2px;
+}
+
+.ev-card__path {
+  font-size: 0.78rem;
+  color: var(--ink-muted);
+  opacity: .7;
+  margin: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  opacity: 0.7;
 }
 
-/* --- Event card: per-job (download / email) row --- */
-.event-job-row {
+.ev-card__divider {
+  height: 1px;
+  background: #ede9f4;
+  margin: 14px 0 12px;
+}
+
+.ev-card__count {
   display: flex;
-  flex-direction: column;
-  gap: 8px;
-  padding-top: 4px;
-}
-
-.event-job-row__actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-
-.event-job-count {
-  display: inline-flex;
   align-items: center;
   gap: 7px;
   font-size: 0.82rem;
   font-weight: 600;
   color: var(--ink);
+  margin-bottom: 12px;
 }
 
-.event-job-count__dot {
-  width: 8px;
-  height: 8px;
+.ev-card__dot {
+  width: 9px;
+  height: 9px;
   border-radius: 50%;
-  background: var(--accent);
+  background: #d1cfe8;
   flex-shrink: 0;
+}
+.ev-card__dot--active {
+  background: #F59E0B;
+}
+
+/* Action buttons row */
+.ev-card__actions {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-bottom: 14px;
+}
+
+.ev-action-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 0.78rem;
+  font-weight: 500;
+  color: var(--ink);
+  background: #fff;
+  border: 1px solid #ddd9ea;
+  border-radius: 7px;
+  padding: 6px 10px;
+  cursor: pointer;
+  transition: background .15s, border-color .15s;
+  white-space: nowrap;
+}
+.ev-action-btn:hover:not(:disabled) {
+  background: #f5f3fb;
+  border-color: #c4bede;
+}
+.ev-action-btn:disabled {
+  opacity: .4;
+  cursor: not-allowed;
+}
+
+/* Footer: Edit | Delete */
+.ev-card__footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-top: 1px solid #ede9f4;
+  margin: 0 -20px;
+  padding: 10px 20px;
+}
+
+.ev-footer-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 0.82rem;
+  font-weight: 500;
+  color: var(--ink-muted);
+  background: none;
+  border: none;
+  padding: 4px 6px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background .15s, color .15s;
+}
+.ev-footer-btn:hover {
+  background: #f5f3fb;
+  color: var(--ink);
+}
+.ev-footer-btn--delete {
+  color: #dc2626;
+}
+.ev-footer-btn--delete:hover {
+  background: #fef2f2;
+  color: #b91c1c;
 }
 
 /* --- Toast inside admin main --- */

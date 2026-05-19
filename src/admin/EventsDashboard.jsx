@@ -209,11 +209,9 @@ export function EventsDashboard() {
           </p>
         ) : (
           dbEvents.map((ev) => {
-            const firstId = ev.templateIds?.[0];
-            const tpl = firstId ? dbTemplates.find((t) => t.id === firstId) : null;
             const dateStr = ev.createdAt
               ? new Date(ev.createdAt).toLocaleDateString(undefined, {
-                  month: 'short',
+                  month: 'long',
                   day: 'numeric',
                   year: 'numeric',
                 })
@@ -223,100 +221,95 @@ export function EventsDashboard() {
             const isBusy = busyId === ev.id;
             const noPhotos = photoCount === 0;
             return (
-              <article key={ev.id} className="card event-card">
-                <div className="card-body">
-                  <div className="card-title-row">
-                    <h2 className="card-title">{ev.name}</h2>
-                    </div>
-                  <p className="card-meta">
-                    {dateStr}{ev.status ? ` · ${ev.status}` : ''}
-                  </p>
-                  {ev.path ? (
-                    <p className="event-card__path" title={ev.path}>{ev.path}</p>
-                  ) : null}
-
-                  <div className="event-card__divider" aria-hidden />
-
-                  <div className="event-job-row">
-                    <span className="event-job-count" title="Photos saved for this event">
-                      <span className="event-job-count__dot" aria-hidden />
-                      {photoCount} {photoCount === 1 ? 'photo' : 'photos'} saved
-                    </span>
-                    <div className="event-job-row__actions">
-                      <button
-                        type="button"
-                        className="btn btn-ghost btn-sm"
-                        onClick={() => window.catherine?.openGallery({ eventId: ev.id, eventName: ev.name })}
-                        disabled={noPhotos}
-                        title={noPhotos ? 'No photos saved for this event yet' : 'Browse photos in gallery'}
-                      >
-                        View Gallery
-                      </button>
-                      <button
-                        type="button"
-                        className="btn btn-ghost btn-sm"
-                        onClick={() => handleDownload(ev)}
-                        disabled={isBusy || noPhotos}
-                        title={
-                          noPhotos
-                            ? 'No photos saved for this event yet'
-                            : 'Download all photos as a zip'
-                        }
-                      >
-                        {isBusy ? 'Working…' : 'Download .zip'}
-                      </button>
-                      <button
-                        type="button"
-                        className="btn btn-ghost btn-sm"
-                        onClick={() => setEmailTarget({ id: ev.id, name: ev.name })}
-                        disabled={isBusy || !jobsSupported || noPhotos}
-                        title={
-                          !jobsSupported
-                            ? 'Available in the desktop app only'
-                            : noPhotos
-                              ? 'No photos saved for this event yet'
-                              : 'Email all photos as a zip'
-                        }
-                      >
-                        Email to client…
-                      </button>
-                    </div>
-                  </div>
-
-                  <div className="card-actions event-card__actions">
-                    {isLive ? (
-                      <button
-                        type="button"
-                        className="event-on-kiosk-chip"
-                        onClick={() => setMode('kiosk')}
-                        title="Switch to guest kiosk"
-                      >
-                        On kiosk
-                      </button>
-                    ) : (
-                      <button
-                        type="button"
-                        className="btn btn-primary btn-sm"
-                        onClick={() => goLiveAndOpenKiosk(ev.id)}
-                      >
-                        Go live
-                      </button>
-                    )}
+              <article key={ev.id} className="ev-card">
+                {/* ── Header: name + badge ── */}
+                <div className="ev-card__header">
+                  <h2 className="ev-card__name">{ev.name}</h2>
+                  {isLive ? (
                     <button
                       type="button"
-                      className="btn btn-ghost btn-sm"
-                      onClick={() => openEventForm(ev.id)}
+                      className="ev-badge ev-badge--live"
+                      onClick={() => setMode('kiosk')}
+                      title="Switch to kiosk view"
                     >
-                      Edit
+                      On kiosk
                     </button>
+                  ) : (
                     <button
                       type="button"
-                      className="btn btn-danger btn-sm"
-                      onClick={() => setDeleteTarget({ id: ev.id, name: ev.name })}
+                      className="ev-badge ev-badge--go"
+                      onClick={() => goLiveAndOpenKiosk(ev.id)}
+                      title="Set as live event and open kiosk"
                     >
-                      Delete
+                      Go Live
                     </button>
-                  </div>
+                  )}
+                </div>
+
+                {/* ── Meta ── */}
+                {dateStr ? <p className="ev-card__date">{dateStr}</p> : null}
+                {ev.path ? <p className="ev-card__path" title={ev.path}>{ev.path}</p> : null}
+
+                {/* ── Divider ── */}
+                <div className="ev-card__divider" aria-hidden />
+
+                {/* ── Photo count ── */}
+                <div className="ev-card__count">
+                  <span className={`ev-card__dot${noPhotos ? '' : ' ev-card__dot--active'}`} aria-hidden />
+                  {photoCount} {photoCount === 1 ? 'photo' : 'photos'} saved
+                </div>
+
+                {/* ── Action buttons ── */}
+                <div className="ev-card__actions">
+                  <button
+                    type="button"
+                    className="ev-action-btn"
+                    onClick={() => window.catherine?.openGallery({ eventId: ev.id, eventName: ev.name })}
+                    disabled={noPhotos}
+                    title={noPhotos ? 'No photos yet' : 'Browse photos in gallery'}
+                  >
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                    View Gallery
+                  </button>
+                  <button
+                    type="button"
+                    className="ev-action-btn"
+                    onClick={() => handleDownload(ev)}
+                    disabled={isBusy || noPhotos}
+                    title={noPhotos ? 'No photos yet' : 'Download all photos as a zip'}
+                  >
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                    {isBusy ? 'Working…' : 'Download .zip'}
+                  </button>
+                  <button
+                    type="button"
+                    className="ev-action-btn"
+                    onClick={() => setEmailTarget({ id: ev.id, name: ev.name })}
+                    disabled={isBusy || noPhotos}
+                    title={noPhotos ? 'No photos yet' : 'Email all photos as a zip'}
+                  >
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
+                    Email to client…
+                  </button>
+                </div>
+
+                {/* ── Footer: Edit | Delete ── */}
+                <div className="ev-card__footer">
+                  <button
+                    type="button"
+                    className="ev-footer-btn"
+                    onClick={() => openEventForm(ev.id)}
+                  >
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                    Edit
+                  </button>
+                  <button
+                    type="button"
+                    className="ev-footer-btn ev-footer-btn--delete"
+                    onClick={() => setDeleteTarget({ id: ev.id, name: ev.name })}
+                  >
+                    Delete
+                  </button>
                 </div>
               </article>
             );
