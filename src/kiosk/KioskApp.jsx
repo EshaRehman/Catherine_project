@@ -142,6 +142,7 @@ export function KioskApp() {
         <ProcessingScreen
           subjectDataUrl={subjectDataUrl}
           template={selectedTemplate}
+          eventId={activeEvent?.id || null}
           onDone={(url) => {
             setResultDataUrl(url);
             setPhase('result');

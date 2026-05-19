@@ -2,7 +2,7 @@ import React, { useEffect, useRef } from 'react';
 import { generateImage } from '../utils/api.js';
 import processingVideoUrl from './processingVideoMedia.js';
 
-export function ProcessingScreen({ subjectDataUrl, template, onDone }) {
+export function ProcessingScreen({ subjectDataUrl, template, eventId, onDone }) {
   const videoRef = useRef(null);
 
   useEffect(() => {
@@ -21,7 +21,7 @@ export function ProcessingScreen({ subjectDataUrl, template, onDone }) {
     const templateId = template?.templateId || template?.id;
 
     const run = async () => {
-      const result = await generateImage(subjectDataUrl, templateId);
+      const result = await generateImage(subjectDataUrl, templateId, eventId);
       if (!alive) return;
 
       if (result.ok && result.data?.output_image_base64) {

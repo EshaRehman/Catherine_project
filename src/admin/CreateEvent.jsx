@@ -148,9 +148,7 @@ export function CreateEvent() {
       </div>
 
       <form className="panel panel--event-form" onSubmit={submit}>
-        <div className="section-title" style={{ marginTop: 0 }}>
-          Event info
-        </div>
+
         <div className="field">
           <label htmlFor="ev-name">Event name</label>
           <input

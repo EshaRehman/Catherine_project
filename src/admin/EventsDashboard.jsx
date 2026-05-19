@@ -3,7 +3,7 @@ import { useApp } from '../state/AppContext.jsx';
 import { TemplateThemePreview } from '../components/TemplateThemePreview.jsx';
 import { ConfirmModal } from '../components/ConfirmModal.jsx';
 import { EmailJobModal } from '../components/EmailJobModal.jsx';
-import { getEvents, getTemplates, deleteEventApi } from '../utils/api.js';
+import { getEvents, getTemplates, deleteEventApi, downloadZipApi } from '../utils/api.js';
 
 
 
@@ -13,7 +13,6 @@ export function EventsDashboard() {
   const [busyId, setBusyId] = useState(null);
   const [statusToast, setStatusToast] = useState(null);
   const [gmailStatus, setGmailStatus] = useState(null);
-  const [gmailBusy, setGmailBusy] = useState(false);
   const [dbEvents, setDbEvents] = useState([]);
   const [dbTemplates, setDbTemplates] = useState([]);
   const [loadingEvents, setLoadingEvents] = useState(true);
@@ -78,11 +77,6 @@ export function EventsDashboard() {
     };
   }, [jobsSupported]);
 
-  const refreshGmailStatus = () => {
-    if (!window.catherine?.gmail?.getStatus) return;
-    window.catherine.gmail.getStatus().then(setGmailStatus);
-  };
-
   const sendViaGmail = !!(gmailStatus?.linked && jobsSupported);
 
   const goLiveAndOpenKiosk = (eventId) => {
@@ -101,33 +95,8 @@ export function EventsDashboard() {
     }, 4500);
   };
 
-  const handleDownload = async (ev) => {
-    if (!jobsSupported) {
-      showToast('Job export needs the desktop app.', 'error');
-      return;
-    }
-    const count = photoCounts[ev.id] || 0;
-    if (count === 0) {
-      showToast(`No photos saved for "${ev.name}" yet.`, 'error');
-      return;
-    }
-    setBusyId(ev.id);
-    try {
-      const res = await downloadEventJob({ eventId: ev.id, eventName: ev.name });
-      if (res?.ok) {
-        showToast(`Saved ${res.count} photo${res.count === 1 ? '' : 's'} to ${res.path}`);
-      } else if (res?.reason === 'cancelled') {
-        /* no-op */
-      } else if (res?.reason === 'no-photos') {
-        showToast('No photos saved for this event yet.', 'error');
-      } else {
-        showToast('Could not save the zip.', 'error');
-      }
-    } catch {
-      showToast('Could not save the zip.', 'error');
-    } finally {
-      setBusyId(null);
-    }
+  const handleDownload = (ev) => {
+    downloadZipApi(ev.id);
   };
 
   const handleEmailSubmit = async ({ recipient, message }) => {
@@ -193,7 +162,7 @@ export function EventsDashboard() {
         title="Delete event"
         message={
           deleteTarget
-            ? `“${deleteTarget.name}” will be removed. Saved photos for this event will also be deleted. This can’t be undone.`
+            ? `"${deleteTarget.name}" will be removed. Saved photos for this event will also be deleted. This can’t be undone.`
             : ''
         }
         confirmLabel="Delete"
@@ -204,6 +173,7 @@ export function EventsDashboard() {
       <EmailJobModal
         open={emailTarget !== null}
         eventName={emailTarget?.name || ''}
+        eventId={emailTarget?.id || ''}
         photoCount={emailTarget ? photoCounts[emailTarget.id] || 0 : 0}
         sendViaGmail={sendViaGmail}
         onCancel={() => setEmailTarget(null)}
@@ -230,86 +200,6 @@ export function EventsDashboard() {
         </div>
       ) : null}
 
-      {jobsSupported && gmailStatus ? (
-        <div className="card" style={{ marginBottom: '1.25rem', padding: '1rem 1.25rem' }}>
-          <h2 className="card-title" style={{ fontSize: '1.05rem', marginBottom: '0.5rem' }}>
-            Gmail delivery
-          </h2>
-          {gmailStatus.linked && gmailStatus.email ? (
-            <p className="admin-page-sub" style={{ margin: 0 }}>
-              Connected as <strong>{gmailStatus.email}</strong>. “Email to client” sends from this account.
-              <button
-                type="button"
-                className="btn btn-ghost btn-sm"
-                style={{ marginLeft: '0.5rem' }}
-                disabled={gmailBusy}
-                onClick={async () => {
-                  setGmailBusy(true);
-                  try {
-                    await window.catherine.gmail.disconnect();
-                    refreshGmailStatus();
-                    showToast('Gmail disconnected.');
-                  } finally {
-                    setGmailBusy(false);
-                  }
-                }}
-              >
-                Disconnect
-              </button>
-            </p>
-          ) : (
-            <>
-              <p className="admin-page-sub" style={{ margin: '0 0 0.75rem' }}>
-                {gmailStatus.clientSecretFound
-                  ? 'Connect once so “Email to client” can send zips from your dedicated Gmail (no mail app).'
-                  : 'Add the OAuth client JSON file (client_secret_….json) next to the app, or set GMAIL_CLIENT_SECRET_PATH, then connect.'}
-              </p>
-              <p
-                className="admin-page-sub"
-                style={{ margin: '0 0 0.75rem', fontSize: '0.85rem', wordBreak: 'break-all' }}
-              >
-                Redirect URI to register in Google Cloud:{' '}
-                <code>{gmailStatus.redirectUri || ''}</code>
-              </p>
-              <button
-                type="button"
-                className="btn btn-primary btn-sm"
-                disabled={gmailBusy || !gmailStatus.clientSecretFound}
-                onClick={async () => {
-                  setGmailBusy(true);
-                  try {
-                    const r = await window.catherine.gmail.connect();
-                    if (r?.ok) {
-                      showToast(r.email ? `Connected: ${r.email}` : 'Gmail connected.');
-                      refreshGmailStatus();
-                    } else {
-                      const msg =
-                        r?.reason === 'port_in_use'
-                          ? 'Port 54321 is in use. Close the other program or restart and try again.'
-                          : r?.reason === 'no_refresh_token'
-                            ? 'No refresh token — revoke app access in Google Account security, then try Connect again.'
-                            : r?.reason === 'token_exchange_failed'
-                              ? `Token exchange failed: ${r.detail || ''}`
-                              : r?.reason === 'access_denied'
-                                ? 'Sign-in was cancelled.'
-                                : `Could not connect (${r?.reason || 'unknown'}).`;
-                      showToast(msg.trim(), 'error');
-                    }
-                  } catch {
-                    showToast('Could not connect Gmail.', 'error');
-                  } finally {
-                    setGmailBusy(false);
-                  }
-                }}
-              >
-                {gmailBusy ? 'Waiting for browser…' : 'Connect Gmail'}
-              </button>
-            </>
-          )}
-        </div>
-      ) : null}
-
-  
       <div className="card-grid card-grid--events">
         {loadingEvents ? (
           <p className="admin-page-sub" style={{ gridColumn: '1 / -1' }}>Loading events...</p>
@@ -329,7 +219,7 @@ export function EventsDashboard() {
                 })
               : '';
             const isLive = settings.activeEventId === ev.id;
-            const photoCount = photoCounts[ev.id] || 0;
+            const photoCount = ev.count ?? 0;
             const isBusy = busyId === ev.id;
             const noPhotos = photoCount === 0;
             return (
@@ -337,15 +227,13 @@ export function EventsDashboard() {
                 <div className="card-body">
                   <div className="card-title-row">
                     <h2 className="card-title">{ev.name}</h2>
-                    {isLive ? (
-                      <span className="event-live-badge" title="This event drives the kiosk">
-                        LIVE
-                      </span>
-                    ) : null}
-                  </div>
+                    </div>
                   <p className="card-meta">
                     {dateStr}{ev.status ? ` · ${ev.status}` : ''}
                   </p>
+                  {ev.path ? (
+                    <p className="event-card__path" title={ev.path}>{ev.path}</p>
+                  ) : null}
 
                   <div className="event-card__divider" aria-hidden />
 
@@ -358,14 +246,21 @@ export function EventsDashboard() {
                       <button
                         type="button"
                         className="btn btn-ghost btn-sm"
+                        onClick={() => window.catherine?.openGallery({ eventId: ev.id, eventName: ev.name })}
+                        disabled={noPhotos}
+                        title={noPhotos ? 'No photos saved for this event yet' : 'Browse photos in gallery'}
+                      >
+                        View Gallery
+                      </button>
+                      <button
+                        type="button"
+                        className="btn btn-ghost btn-sm"
                         onClick={() => handleDownload(ev)}
-                        disabled={isBusy || !jobsSupported || noPhotos}
+                        disabled={isBusy || noPhotos}
                         title={
-                          !jobsSupported
-                            ? 'Available in the desktop app only'
-                            : noPhotos
-                              ? 'No photos saved for this event yet'
-                              : 'Download all photos as a zip'
+                          noPhotos
+                            ? 'No photos saved for this event yet'
+                            : 'Download all photos as a zip'
                         }
                       >
                         {isBusy ? 'Working…' : 'Download .zip'}

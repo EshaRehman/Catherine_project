@@ -1,14 +1,11 @@
 import React, { useEffect, useId, useState } from 'react';
+import { sendEmailApi } from '../utils/api.js';
 
-/**
- * Prompts the operator for the client's email + an optional message before
- * generating a zip and opening the default mail client.
- */
 export function EmailJobModal({
   open,
   eventName = '',
+  eventId = '',
   photoCount = 0,
-  sendViaGmail = false,
   onCancel,
   onSubmit,
 }) {
@@ -20,15 +17,17 @@ export function EmailJobModal({
   const [message, setMessage] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
+  const [sent, setSent] = useState(false);
 
   useEffect(() => {
     if (!open) return;
     setRecipient('');
     setMessage(
-      `Hi,\n\nYour photos from ${eventName || 'our event'} are attached as a zip file.\n\nThanks!`,
+      `Hi [Client Name],\n\nThank you for having us at your wonderful event.\n\nAttached you'll find the full set of AI Photo Booth images from the activation, provided in both high-resolution and social-ready formats.\n\nIt was a pleasure to be part of your event, and we hope the experience added something special for your guests.\n\nIf you need anything further please don't hesitate to reach out. We hope to work with you again.\n\nWarm regards,\nCatherine Lowe\nFounder\nAI Photo Booth Co\nhttp://www.aiphotoboothco.com.au`,
     );
     setError('');
     setSubmitting(false);
+    setSent(false);
   }, [open, eventName]);
 
   useEffect(() => {
@@ -58,22 +57,15 @@ export function EmailJobModal({
     setError('');
     setSubmitting(true);
     try {
-      const res = await onSubmit({ recipient: trimmed, message: message.trim() });
-      if (res?.ok) return; // parent closes the modal on success
-      if (res?.reason === 'cancelled') {
-        setSubmitting(false);
-        return;
-      }
-      if (res?.reason === 'no-photos') {
-        setError('No photos saved for this event yet.');
-      } else if (res?.reason === 'unsupported') {
-        setError('Email export is only available in the desktop app.');
+      const res = await sendEmailApi({ receiverEmail: trimmed, message: message.trim(), eventId });
+      if (res.ok) {
+        setSent(true);
       } else {
-        setError('Something went wrong preparing the email.');
+        setError(res.error || 'Failed to send email. Please try again.');
       }
-      setSubmitting(false);
     } catch {
-      setError('Something went wrong preparing the email.');
+      setError('Something went wrong. Please try again.');
+    } finally {
       setSubmitting(false);
     }
   };
@@ -89,15 +81,20 @@ export function EmailJobModal({
       >
         <h2 id={titleId}>Email job to client</h2>
         <p>
-          {photoCount > 0
-            ? `${photoCount} photo${photoCount === 1 ? '' : 's'} from `
-            : ''}
-          <strong>{eventName || 'this event'}</strong> will be packaged as a zip.
-          {sendViaGmail
-            ? ' They will be sent from the Gmail account you connected in Events (attachment size limits apply).'
-            : ' Save the zip, then your default mail app opens with the message pre-filled.'}
+          <strong>{eventName || 'This event'}</strong> — send the photos directly to your client.
         </p>
 
+        {sent ? (
+          <div className="email-sent-state">
+            <div className="email-sent-state__icon" aria-hidden>
+              <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <polyline points="20 6 9 17 4 12" />
+              </svg>
+            </div>
+            <p className="email-sent-state__text">Email has been sent</p>
+            <button type="button" className="btn btn-ghost" onClick={onCancel}>Close</button>
+          </div>
+        ) : (
         <form onSubmit={handleSubmit} className="modal-form">
           <div className="field">
             <label htmlFor={emailId}>Client email</label>
@@ -118,7 +115,7 @@ export function EmailJobModal({
             <textarea
               id={messageId}
               className="textarea textarea--compact"
-              rows={4}
+              rows={14}
               value={message}
               onChange={(e) => setMessage(e.target.value)}
               disabled={submitting}
@@ -140,11 +137,12 @@ export function EmailJobModal({
             >
               Cancel
             </button>
-            <button type="submit" className="btn btn-primary" disabled={submitting || photoCount === 0}>
-              {submitting ? (sendViaGmail ? 'Sending…' : 'Preparing…') : sendViaGmail ? 'Send email' : 'Save zip & open email'}
+            <button type="submit" className="btn btn-primary" disabled={submitting}>
+              {submitting ? 'Sending…' : 'Send'}
             </button>
           </div>
         </form>
+        )}
       </div>
     </div>
   );

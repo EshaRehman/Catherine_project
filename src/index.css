@@ -102,10 +102,85 @@ select {
   display: flex;
   flex-direction: column;
   gap: 22px;
-  padding: 28px 28px 32px;
+  padding: 28px 28px 24px;
   border-right: 1px solid rgba(61, 43, 86, 0.08);
   background: rgba(255, 255, 255, 0.88);
   backdrop-filter: blur(14px);
+}
+
+.admin-sidebar__bottom {
+  margin-top: auto;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.admin-sidebar__settings-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: var(--ink-muted);
+  padding: 9px 12px;
+  border-radius: var(--radius-md);
+  text-align: left;
+  transition: background 0.15s, color 0.15s;
+}
+
+.admin-sidebar__settings-btn:hover,
+.admin-sidebar__settings-btn.is-active {
+  color: var(--ink);
+  background: rgba(61, 43, 86, 0.06);
+}
+
+.admin-settings-panel {
+  background: #fff;
+  border: 1px solid rgba(61, 43, 86, 0.1);
+  border-radius: var(--radius-md);
+  box-shadow: 0 4px 16px rgba(20, 10, 40, 0.1);
+  overflow: hidden;
+  padding: 4px;
+}
+
+.admin-settings-panel__item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.86rem;
+  font-weight: 500;
+  color: var(--ink);
+  padding: 9px 12px;
+  border-radius: calc(var(--radius-md) - 2px);
+  text-align: left;
+  transition: background 0.15s;
+}
+
+.admin-settings-panel__item:hover {
+  background: rgba(61, 43, 86, 0.05);
+}
+
+.admin-settings-panel__dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #d1d5db;
+  flex-shrink: 0;
+}
+
+.admin-settings-panel__dot--on {
+  background: #22c55e;
 }
 
 .admin-brand {
@@ -2283,7 +2358,7 @@ select {
   padding: 4px 20px 4px;
 }
 
-/* Shared landscape stage — 16:9 (1920×1080) — camera / processing / result use identical outer frame */
+/* Shared portrait stage — 1080×1320 — camera / processing / result use identical outer frame */
 .kiosk-portrait-frame {
   position: relative;
   border-radius: clamp(18px, 2.5vw, 28px);
@@ -2296,14 +2371,15 @@ select {
     linear-gradient(165deg, #1e1830 0%, #0f0c18 45%, #1a1428 100%);
 }
 
-/* Camera → processing → result: one 16:9 slot, fills available width, never overflows */
+/* Camera → processing → result: portrait 1080×1320, height-constrained, never overflows */
 .kiosk-portrait-frame.kiosk-flow-frame {
-  --frame-max-w: min(96vw, calc((100dvh - 120px) * 16 / 9));
-  /* Width drives the box; height follows the 16:9 ratio */
+  /* Height drives the box; width follows the 1080/1320 ratio */
+  --frame-max-w: min(96vw, calc((100dvh - 120px) * 1080 / 1320));
   width: var(--frame-max-w);
-  height: calc(var(--frame-max-w) * 9 / 16);
-  aspect-ratio: 16 / 9;
+  height: calc(var(--frame-max-w) * 1320 / 1080);
+  aspect-ratio: 1080 / 1320;
   max-height: calc(100dvh - 120px);
+  max-width: 96vw;
   box-sizing: border-box;
 }
 
@@ -3173,6 +3249,16 @@ select {
   margin-top: 2px;
 }
 
+.event-card__path {
+  font-size: 0.75rem;
+  color: var(--ink-muted);
+  margin: -4px 0 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  opacity: 0.7;
+}
+
 /* --- Event card: per-job (download / email) row --- */
 .event-job-row {
   display: flex;
@@ -3228,6 +3314,105 @@ select {
   border-color: rgba(196, 76, 76, 0.28);
 }
 
+/* --- Gmail delivery bar --- */
+.gmail-delivery-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 16px;
+  margin-bottom: 18px;
+  background: var(--bg-elevated);
+  border: 1px solid rgba(61, 43, 86, 0.08);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-card);
+}
+
+.gmail-delivery-bar__info {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.86rem;
+  color: var(--ink);
+}
+
+.gmail-delivery-bar__dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #d1d5db;
+  flex-shrink: 0;
+}
+
+.gmail-delivery-bar__dot--on {
+  background: #22c55e;
+  box-shadow: 0 0 0 3px rgba(34, 197, 94, 0.2);
+}
+
+.gmail-delivery-bar__label {
+  color: var(--ink-muted);
+}
+
+/* --- Gmail connect modal --- */
+.gmail-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(20, 10, 40, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 200;
+  backdrop-filter: blur(2px);
+}
+
+.gmail-modal {
+  background: #fff;
+  border-radius: var(--radius-lg);
+  padding: 28px 28px 24px;
+  width: 100%;
+  max-width: 400px;
+  box-shadow: 0 20px 60px rgba(20, 10, 40, 0.18);
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.gmail-modal__title {
+  margin: 0;
+  font-size: 1.05rem;
+  font-weight: 800;
+  color: var(--ink);
+}
+
+.gmail-modal__sub {
+  margin: -6px 0 0;
+  font-size: 0.82rem;
+  color: var(--ink-muted);
+  line-height: 1.5;
+}
+
+.gmail-modal__fields {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.gmail-modal__error {
+  font-size: 0.8rem;
+  color: var(--danger);
+  padding: 8px 12px;
+  background: rgba(196, 76, 76, 0.08);
+  border-radius: var(--radius-md);
+  border: 1px solid rgba(196, 76, 76, 0.2);
+}
+
+.gmail-modal__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 4px;
+}
+
 @keyframes adminToastIn {
   from {
     opacity: 0;
@@ -3242,7 +3427,8 @@ select {
 
 /* --- Email-job modal (wider with form fields) --- */
 .modal--job {
-  max-width: 480px;
+  max-width: 780px;
+  width: 90vw;
 }
 
 .modal--job h2 {
@@ -3264,4 +3450,31 @@ select {
 
 .modal--job .modal-actions {
   margin-top: 8px;
+}
+
+.email-sent-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  padding: 32px 0 12px;
+}
+
+.email-sent-state__icon {
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, rgba(212, 160, 23, 0.15), rgba(212, 160, 23, 0.06));
+  border: 2px solid rgba(212, 160, 23, 0.35);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--accent);
+}
+
+.email-sent-state__text {
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: var(--ink);
+  margin: 0;
 }

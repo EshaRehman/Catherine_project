@@ -4,7 +4,7 @@ contextBridge.exposeInMainWorld('catherine', {
   printDataUrl: (dataUrl) => ipcRenderer.invoke('print-data-url', dataUrl),
   api: {
     request: (method, url, payload) => ipcRenderer.invoke('api-request', { method, url, payload }),
-    generate: (url, imageBase64, templateId, seed) => ipcRenderer.invoke('api-generate', { url, imageBase64, templateId, seed }),
+    generate: (url, imageBase64, templateId, eventId, seed) => ipcRenderer.invoke('api-generate', { url, imageBase64, templateId, eventId, seed }),
   },
   gmail: {
     getStatus: () => ipcRenderer.invoke('gmail-auth-status'),
@@ -18,4 +18,5 @@ contextBridge.exposeInMainWorld('catherine', {
     downloadZip: (payload) => ipcRenderer.invoke('job-download-zip', payload),
     emailZip: (payload) => ipcRenderer.invoke('job-email-zip', payload),
   },
+  openGallery: (payload) => ipcRenderer.invoke('open-gallery', payload),
 });
