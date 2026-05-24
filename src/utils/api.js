@@ -1,5 +1,21 @@
 const BASE_URL = 'http://localhost:8000';
 
+/**
+ * Safely extract a human-readable error string from an API response body.
+ * FastAPI/Pydantic v2 returns detail as an array of {type, loc, msg, input}
+ * objects — flatten those so React can render the string safely.
+ */
+function extractError(body, fallback) {
+  let detail = body?.detail || body?.message || fallback;
+  if (Array.isArray(detail)) {
+    return detail.map(e => e.msg || JSON.stringify(e)).join(' · ');
+  }
+  if (typeof detail !== 'string') {
+    return JSON.stringify(detail);
+  }
+  return detail;
+}
+
 async function apiRequest(method, endpoint, payload) {
   const bridge = window?.catherine?.api;
   if (!bridge) {
@@ -10,8 +26,7 @@ async function apiRequest(method, endpoint, payload) {
     const res = await bridge.request(method, `${BASE_URL}${endpoint}`, payload);
     
     if (res.status < 200 || res.status >= 300) {
-      const detail = res.body?.detail || res.body?.message || `Server error ${res.status}`;
-      return { ok: false, error: detail };
+      return { ok: false, error: extractError(res.body, `Server error ${res.status}`) };
     }
     
     return { ok: true, data: res.body };
@@ -89,8 +104,7 @@ export async function generateImage(imageBase64, templateId, eventId, seed) {
   try {
     const res = await bridge.generate(`${BASE_URL}/generate`, imageBase64, templateId, eventId, seed);
     if (res.status < 200 || res.status >= 300) {
-      const detail = res.body?.detail || res.body?.message || `Server error ${res.status}`;
-      return { ok: false, error: detail };
+      return { ok: false, error: extractError(res.body, `Server error ${res.status}`) };
     }
     return { ok: true, data: res.body };
   } catch (err) {

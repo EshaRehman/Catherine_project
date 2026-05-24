@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useApp } from '../state/AppContext.jsx';
 import { TemplateThemePreview } from '../components/TemplateThemePreview.jsx';
-import { getTemplateTagline } from '../constants/templateTaglines.js';
 import { ConfirmModal } from '../components/ConfirmModal.jsx';
 import { getTemplates, deleteTemplate as apiDeleteTemplate } from '../utils/api.js';
 
@@ -101,9 +100,6 @@ export function TemplatesPage() {
               </div>
               <div className="card-body">
                 <h2 className="card-title">{t.name}</h2>
-                <p className="card-meta">
-                  {getTemplateTagline(t.previewClass) || 'Custom template'}
-                </p>
                 <div className="card-actions">
                   <button
                     type="button"

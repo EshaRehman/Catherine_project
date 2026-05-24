@@ -171,8 +171,8 @@ const PEOPLE_OPTIONS = [
   { value: 5, label: '5 People' },
 ];
 
-const BASE_PROMPT_MAX = 1000;
-const PEOPLE_PROMPT_MAX = 1000;
+const BASE_PROMPT_MAX = 10000;
+const PEOPLE_PROMPT_MAX = 10000;
 
 const defaultPeoplePrompts = () => ({ 1: '', 2: '', 3: '', 4: '', 5: '' });
 

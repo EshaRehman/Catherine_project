@@ -1,7 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useApp } from '../state/AppContext.jsx';
 import { TemplateThemePreview } from '../components/TemplateThemePreview.jsx';
-import { getTemplateTagline } from '../constants/templateTaglines.js';
 import { createEvent, getTemplates, getEvents } from '../utils/api.js';
 
 function TemplatePickCard({ template, selected, onToggle }) {
@@ -18,9 +17,6 @@ function TemplatePickCard({ template, selected, onToggle }) {
       <TemplateThemePreview template={template} variant="kiosk" />
       <div className="kiosk-tpl-footer">
         <div className="kiosk-tpl-title">{template.name}</div>
-        {getTemplateTagline(template.previewClass) ? (
-          <div className="kiosk-tpl-tagline">{getTemplateTagline(template.previewClass)}</div>
-        ) : null}
       </div>
     </button>
   );
