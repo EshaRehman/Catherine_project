@@ -186,10 +186,12 @@ export function TemplateEditor() {
 
   const [draft, setDraft] = useState(() => createDefaultTemplate());
   const [previewPhase, setPreviewPhase] = useState('idle'); // 'idle'|'camera'|'processing'|'result'
-  const [resultDataUrl, setResultDataUrl] = useState(null);
+  const [rawResultDataUrl, setRawResultDataUrl] = useState(null);  // raw AI output (no overlay)
+  const [resultDataUrl, setResultDataUrl] = useState(null);        // composited (used only for modal)
   const [idlePreviewUrl, setIdlePreviewUrl] = useState(null);
   const [previewError, setPreviewError] = useState(null);
   const [showResultModal, setShowResultModal] = useState(false);
+  const [stageScale, setStageScale] = useState(1); // preview stage width / 1080
   const [camReady, setCamReady] = useState(false);
   const [camCount, setCamCount] = useState(0);
   const [basePrompt, setBasePrompt] = useState('');
@@ -361,17 +363,14 @@ export function TemplateEditor() {
 
     setPreviewPhase('processing');
     setPreviewError(null);
+    setRawResultDataUrl(null);
     setResultDataUrl(null);
 
     previewImageApi(dataUrl, combined, undefined).then(async res => {
       if (res.ok && res.data?.output_image_base64) {
         const rawUrl = `data:image/jpeg;base64,${res.data.output_image_base64}`;
-        try {
-          const composited = await compositeResultPreview(rawUrl, draftRef.current);
-          setResultDataUrl(composited);
-        } catch {
-          setResultDataUrl(rawUrl);
-        }
+        // Store raw AI output — overlay is rendered live as HTML so it stays fully editable
+        setRawResultDataUrl(rawUrl);
         setPreviewError(null);
       } else {
         setPreviewError(res.error || 'Generation failed.');
@@ -444,6 +443,30 @@ export function TemplateEditor() {
       window.removeEventListener('pointerup', onUp);
     };
   }, [pctFromEvent, draft.logoX, draft.logoY]);
+
+  // Track preview stage width so we can scale font/logo sizes correctly in the live overlay
+  useEffect(() => {
+    const el = stageRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver(([entry]) => {
+      setStageScale(entry.contentRect.width / 1080);
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+
+  // Open zoom modal: composite the raw result with current draft settings on-demand
+  const openModal = useCallback(async () => {
+    if (!rawResultDataUrl) return;
+    setShowResultModal(true);
+    setResultDataUrl(null); // clear stale
+    try {
+      const url = await compositeResultPreview(rawResultDataUrl, draft);
+      setResultDataUrl(url);
+    } catch {
+      setResultDataUrl(rawResultDataUrl);
+    }
+  }, [rawResultDataUrl, draft]);
 
   const save = async (asNew) => {
     setSaveStatus('saving');
@@ -569,18 +592,98 @@ export function TemplateEditor() {
                 </div>
               )}
 
-              {previewPhase === 'result' && resultDataUrl && (
-                <img
-                  src={resultDataUrl}
-                  alt="Preview result"
-                  onClick={() => setShowResultModal(true)}
-                  style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block', cursor: 'zoom-in' }}
-                />
+              {previewPhase === 'result' && rawResultDataUrl && (
+                <div style={{ position: 'relative', width: '100%', height: '100%', overflow: 'hidden' }}>
+                  {/* Raw AI output as base */}
+                  <img
+                    src={rawResultDataUrl}
+                    alt="Preview result"
+                    style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
+                  />
+
+                  {/* Live text overlay — drag to reposition */}
+                  {draft.overlayText?.trim() && (
+                    <div
+                      style={{
+                        position: 'absolute',
+                        left: `${draft.textX}%`,
+                        top: `${draft.textY}%`,
+                        transform: 'translate(-50%, -50%)',
+                        fontFamily: draft.fontFamily || 'sans-serif',
+                        fontSize: Math.max(8, Math.round((draft.fontSize || 42) * stageScale)),
+                        fontWeight: 700,
+                        color: draft.textColor || '#fff',
+                        textShadow: '0 1px 6px rgba(0,0,0,0.6)',
+                        WebkitTextStroke: `${Math.max(1, Math.round((draft.fontSize || 42) * stageScale * 0.04))}px rgba(0,0,0,0.35)`,
+                        cursor: 'grab',
+                        userSelect: 'none',
+                        whiteSpace: 'nowrap',
+                        pointerEvents: 'all',
+                        zIndex: 5,
+                        outline: '1.5px dashed rgba(255,255,255,0.4)',
+                        outlineOffset: 4,
+                        padding: '2px 4px',
+                      }}
+                      onPointerDown={(e) => {
+                        e.stopPropagation();
+                        dragRef.current = 'text';
+                        e.currentTarget.setPointerCapture(e.pointerId);
+                      }}
+                      title="Drag to move text"
+                    >
+                      {draft.overlayText}
+                    </div>
+                  )}
+
+                  {/* Live logo overlay — drag to reposition */}
+                  {draft.logoUrl && (
+                    <img
+                      src={draft.logoUrl}
+                      draggable={false}
+                      alt=""
+                      style={{
+                        position: 'absolute',
+                        left: `${draft.logoX}%`,
+                        top: `${draft.logoY}%`,
+                        transform: 'translate(-50%, -50%)',
+                        width: `${(draft.logoScale || 0.2) * 100}%`,
+                        height: 'auto',
+                        cursor: 'grab',
+                        userSelect: 'none',
+                        pointerEvents: 'all',
+                        zIndex: 5,
+                        outline: '1.5px dashed rgba(255,255,255,0.4)',
+                        outlineOffset: 3,
+                      }}
+                      onPointerDown={(e) => {
+                        e.stopPropagation();
+                        dragRef.current = 'logo';
+                        e.currentTarget.setPointerCapture(e.pointerId);
+                        e.preventDefault();
+                      }}
+                      title="Drag to move logo"
+                    />
+                  )}
+
+                  {/* Zoom hint */}
+                  <button
+                    type="button"
+                    onClick={openModal}
+                    style={{
+                      position: 'absolute', bottom: 6, right: 6,
+                      background: 'rgba(0,0,0,0.55)', border: '1px solid rgba(255,255,255,0.25)',
+                      color: '#fff', fontSize: 10, padding: '3px 7px', borderRadius: 5,
+                      cursor: 'pointer', zIndex: 10,
+                    }}
+                  >
+                    🔍 Zoom
+                  </button>
+                </div>
               )}
 
-              {previewPhase === 'result' && !resultDataUrl && previewError && (
+              {previewPhase === 'result' && !rawResultDataUrl && previewError && (
                 <div style={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 8, padding: '0 20px', background: '#111' }}>
-                  <span style={{ color: '#f87171', fontSize: 13, textAlign: 'center', lineHeight: 1.5 }}>{previewError}</span>
+                  <span style={{ color: '#f87171', fontSize: 13, textAlign: 'center', lineHeight: 1.5 }}>⚠️ {previewError}</span>
                 </div>
               )}
             </div>
@@ -608,7 +711,7 @@ export function TemplateEditor() {
               <button
                 type="button"
                 className="btn btn-primary template-editor-page__preview-btn"
-                onClick={() => { setResultDataUrl(null); setPreviewError(null); setPreviewPhase('camera'); }}
+                onClick={() => { setRawResultDataUrl(null); setResultDataUrl(null); setPreviewError(null); setPreviewPhase('camera'); }}
               >
                 Retry
               </button>
@@ -882,7 +985,7 @@ export function TemplateEditor() {
       </div>
       )}
 
-      {showResultModal && resultDataUrl && (
+      {showResultModal && (
         <div
           onClick={() => setShowResultModal(false)}
           style={{
@@ -892,17 +995,25 @@ export function TemplateEditor() {
             cursor: 'zoom-out',
           }}
         >
-          <img
-            src={resultDataUrl}
-            alt="Generated preview"
+          {resultDataUrl ? (
+            <img
+              src={resultDataUrl}
+              alt="Generated preview"
+              style={{ maxWidth: '90vw', maxHeight: '95vh', objectFit: 'contain', borderRadius: 8, display: 'block' }}
+            />
+          ) : (
+            <div style={{ color: '#888', fontSize: 13 }}>Compositing…</div>
+          )}
+          <button
+            type="button"
+            onClick={(e) => { e.stopPropagation(); setShowResultModal(false); }}
             style={{
-              maxWidth: '90vw',
-              maxHeight: '95vh',
-              objectFit: 'contain',
-              borderRadius: 8,
-              display: 'block',
+              position: 'fixed', top: 16, right: 18,
+              background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.2)',
+              color: '#fff', width: 36, height: 36, borderRadius: 8,
+              cursor: 'pointer', fontSize: 18, display: 'flex', alignItems: 'center', justifyContent: 'center',
             }}
-          />
+          >✕</button>
         </div>
       )}
     </div>

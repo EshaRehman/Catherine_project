@@ -4,12 +4,101 @@ const fsp = require('node:fs/promises');
 const path = require('node:path');
 const http = require('node:http');
 const https = require('node:https');
+const { spawn } = require('node:child_process');
 const JSZip = require('jszip');
 const { registerGmailIpc, trySendJobZipViaGmail } = require('./gmail-oauth-main');
 
 if (require('electron-squirrel-startup')) {
   app.quit();
 }
+
+// ================================================================
+//   BACKEND PROCESS MANAGEMENT
+//   Starts FastAPI and ComfyUI when the app launches,
+//   kills them when the app closes.
+// ================================================================
+
+// ---- Resolve APP-Electron directory ----
+// Dev machine  : D:\APP-Electron  (checked first)
+// Production   : C:\APP-Electron  (setup script installs here)
+function resolveAppDir() {
+  const candidates = ['D:\\APP-Electron', 'C:\\APP-Electron'];
+  for (const dir of candidates) {
+    if (fs.existsSync(dir)) {
+      console.log('[Backend] Using APP-Electron at:', dir);
+      return dir;
+    }
+  }
+  console.error('[Backend] APP-Electron directory not found on D: or C:');
+  return 'C:\\APP-Electron'; // last resort
+}
+
+const APP_DIR        = resolveAppDir();
+const FASTAPI_DIR    = `${APP_DIR}\\Backend(Fast-API)`;
+const COMFYUI_DIR    = `${APP_DIR}\\ComfyUI`;
+
+// Python: ComfyUI gets its own venv (step 7b of setup script).
+// Falls back to shared venv if own venv not yet created.
+function resolveComfyPython() {
+  const own      = `${APP_DIR}\\ComfyUI\\venv\\Scripts\\python.exe`;
+  const fallback = `${APP_DIR}\\venv\\Scripts\\python.exe`;
+  if (fs.existsSync(own)) return own;
+  console.warn('[ComfyUI] ComfyUI\\venv not found — falling back to shared venv. Re-run setup script to create a dedicated ComfyUI venv.');
+  return fallback;
+}
+
+let fastapiProcess = null;
+let comfyuiProcess = null;
+
+function startBackends() {
+  // --- FastAPI (port 8000) ---
+  const backendPython = `${APP_DIR}\\venv\\Scripts\\python.exe`;
+  if (!fs.existsSync(backendPython)) {
+    console.error('[FastAPI] Python not found at:', backendPython);
+  } else {
+    console.log('[Backend] Starting FastAPI from:', FASTAPI_DIR);
+    fastapiProcess = spawn(
+      backendPython,
+      ['-m', 'uvicorn', 'main:app', '--host', '127.0.0.1', '--port', '8000'],
+      { cwd: FASTAPI_DIR, windowsHide: true, detached: false }
+    );
+    fastapiProcess.stdout.on('data', d => console.log('[FastAPI]', d.toString().trim()));
+    fastapiProcess.stderr.on('data', d => console.log('[FastAPI]', d.toString().trim()));
+    fastapiProcess.on('exit', code => console.log(`[FastAPI] exited with code ${code}`));
+  }
+
+  // --- ComfyUI (port 8188) ---
+  const comfyPython = resolveComfyPython();
+  if (!fs.existsSync(comfyPython)) {
+    console.error('[ComfyUI] Python not found. Run the setup script to create the venv.');
+  } else {
+    console.log('[Backend] Starting ComfyUI from:', COMFYUI_DIR);
+    comfyuiProcess = spawn(
+      comfyPython,
+      ['main.py', '--listen', '127.0.0.1', '--port', '8188'],
+      { cwd: COMFYUI_DIR, windowsHide: true, detached: false }
+    );
+    comfyuiProcess.stdout.on('data', d => console.log('[ComfyUI]', d.toString().trim()));
+    comfyuiProcess.stderr.on('data', d => console.log('[ComfyUI]', d.toString().trim()));
+    comfyuiProcess.on('exit', code => console.log(`[ComfyUI] exited with code ${code}`));
+  }
+}
+
+function stopBackends() {
+  if (fastapiProcess) {
+    try { fastapiProcess.kill('SIGTERM'); } catch {}
+    fastapiProcess = null;
+  }
+  if (comfyuiProcess) {
+    try { comfyuiProcess.kill('SIGTERM'); } catch {}
+    comfyuiProcess = null;
+  }
+}
+
+// Kill backends when Electron exits for any reason
+app.on('before-quit', stopBackends);
+app.on('will-quit',   stopBackends);
+process.on('exit',    stopBackends);
 
 let printWindow = null;
 
@@ -473,26 +562,9 @@ ipcMain.handle('job-email-zip', async (event, payload = {}) => {
 ipcMain.handle('open-gallery', async (_event, { eventId, eventName = 'Gallery' } = {}) => {
   if (!eventId) return;
 
-  // Fetch image list server-side to avoid CORS in renderer
-  let images = [];
-  try {
-    const res = await httpRequest('GET', `http://127.0.0.1:8000/event-images/${eventId}`);
-    if (res.status === 200 && res.body && Array.isArray(res.body.images)) {
-      images = res.body.images;
-    }
-  } catch { /* open empty gallery */ }
-
-  const BASE = 'http://127.0.0.1:8000';
-  const resolved = images.map(img => ({
-    filename: img.filename || 'photo.jpg',
-    src: img.url ? (img.url.startsWith('http') ? img.url : BASE + img.url) : '',
-    size: img.size || 0,
-    createdAt: img.createdAt || '',
-  }));
-
   const safeTitle = (eventName || 'Gallery')
     .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-  const imagesJson = JSON.stringify(resolved);
+  const safeEventId = String(eventId).replace(/[^A-Za-z0-9_-]/g, '');
 
   const html = `<!doctype html>
 <html lang="en">
@@ -586,6 +658,10 @@ body{background:#ede8df;color:#1a1a1a;font-family:-apple-system,BlinkMacSystemFo
 /* ── Empty state ── */
 #empty{padding:60px 0;color:#b0a498;font-size:15px;display:none}
 
+/* ── New-image flash on card ── */
+@keyframes cardFlash{0%{box-shadow:0 0 0 4px rgba(245,166,35,.9),0 0 40px rgba(245,166,35,.5)}100%{box-shadow:0 0 0 3px rgba(245,166,35,.18),0 4px 18px rgba(232,103,31,.22),0 0 40px rgba(245,166,35,.10)}}
+.card--new{animation:cardFlash 1.4s ease-out forwards}
+
 /* ── Lightbox ── */
 #lb{position:fixed;inset:0;background:rgba(8,5,2,.94);z-index:100;display:flex;align-items:center;justify-content:center}
 #lb.off{display:none}
@@ -642,83 +718,146 @@ body{background:#ede8df;color:#1a1a1a;font-family:-apple-system,BlinkMacSystemFo
 </div>
 
 <script>
-const RAW=${imagesJson};
-let IMAGES=[...RAW].sort((a,b)=>new Date(b.createdAt||0)-new Date(a.createdAt||0));
-let cur=0,ctxIdx=-1;
+const BASE = 'http://127.0.0.1:8000';
+const EVENT_ID = '${safeEventId}';
 
-const grid=document.getElementById('grid');
-const lb=document.getElementById('lb');
-const lbImg=document.getElementById('lb-img');
-const lbFoot=document.getElementById('lb-foot');
-const lbSpin=document.getElementById('lb-spin');
-const ctx=document.getElementById('ctx');
+let IMAGES = [];   // sorted newest-first
+let cur = 0, ctxIdx = -1;
 
-function renderGrid(){
-  grid.innerHTML='';
-  document.getElementById('empty').style.display=IMAGES.length?'none':'block';
-  IMAGES.forEach((img,i)=>{
-    const card=document.createElement('div');
-    card.className='card';
-    const el=document.createElement('img');
-    el.loading='lazy';el.alt=img.filename;el.src=img.src;
-    el.onload=()=>el.classList.add('rdy');
-    card.appendChild(el);
-    card.addEventListener('click',()=>openLB(i));
-    card.addEventListener('contextmenu',e=>{e.preventDefault();openCtx(e,i);});
-    grid.appendChild(card);
+const grid    = document.getElementById('grid');
+const lb      = document.getElementById('lb');
+const lbImg   = document.getElementById('lb-img');
+const lbFoot  = document.getElementById('lb-foot');
+const lbSpin  = document.getElementById('lb-spin');
+const ctx     = document.getElementById('ctx');
+
+/* ── Helpers ── */
+function normalise(img) {
+  return {
+    filename : img.filename || 'photo.jpg',
+    src      : img.url ? (img.url.startsWith('http') ? img.url : BASE + img.url) : '',
+    size     : img.size || 0,
+    createdAt: img.createdAt || '',
+  };
+}
+
+function makeCard(img, i, flash) {
+  const card = document.createElement('div');
+  card.className = 'card' + (flash ? ' card--new' : '');
+  const el = document.createElement('img');
+  el.loading = 'lazy'; el.alt = img.filename; el.src = img.src;
+  el.onload = () => el.classList.add('rdy');
+  card.appendChild(el);
+  card.addEventListener('click', () => openLB(i));
+  card.addEventListener('contextmenu', e => { e.preventDefault(); openCtx(e, i); });
+  return card;
+}
+
+function renderGrid() {
+  grid.innerHTML = '';
+  document.getElementById('empty').style.display = IMAGES.length ? 'none' : 'block';
+  IMAGES.forEach((img, i) => grid.appendChild(makeCard(img, i, false)));
+}
+
+/* Prepend a single new card without rebuilding entire grid */
+function prependCard(img) {
+  document.getElementById('empty').style.display = 'none';
+  // Re-index existing cards (+1 each)
+  [...grid.children].forEach(card => {
+    const old = parseInt(card.dataset.idx || 0);
+    card.dataset.idx = old + 1;
+    card.onclick = null;
+    card.addEventListener('click', () => openLB(old + 1));
   });
+  const card = makeCard(img, 0, true);
+  card.dataset.idx = 0;
+  grid.prepend(card);
 }
 
-function openCtx(e,i){
-  ctxIdx=i;ctx.classList.add('show');
-  ctx.style.left=Math.min(e.clientX,window.innerWidth-160)+'px';
-  ctx.style.top=Math.min(e.clientY,window.innerHeight-80)+'px';
+/* ── SSE connection ── */
+let es = null, retryTimer = null;
+
+function connectSSE() {
+  if (es) { es.close(); es = null; }
+  clearTimeout(retryTimer);
+
+  es = new EventSource(BASE + '/event-images/' + EVENT_ID + '/stream');
+
+  es.addEventListener('snapshot', e => {
+    const data = JSON.parse(e.data);
+    IMAGES = (data.images || []).map(normalise)
+      .sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
+    renderGrid();
+  });
+
+  es.addEventListener('image_added', e => {
+    const data = JSON.parse(e.data);
+    const img = normalise(data);
+    IMAGES.unshift(img);          // newest first
+    prependCard(img);
+    // If lightbox open, shift index since we prepended
+    if (!lb.classList.contains('off')) cur += 1;
+  });
+
+  es.onerror = () => {
+    es.close(); es = null;
+    retryTimer = setTimeout(connectSSE, 3000);
+  };
 }
-function closeCtx(){ctx.classList.remove('show');ctxIdx=-1;}
-document.addEventListener('click',()=>closeCtx());
-ctx.addEventListener('click',e=>e.stopPropagation());
-document.getElementById('ctx-dl').addEventListener('click',()=>{
-  if(ctxIdx>=0){downloadImg(IMAGES[ctxIdx]);closeCtx();}
+
+connectSSE();
+window.addEventListener('beforeunload', () => { if (es) es.close(); });
+
+/* ── Context menu ── */
+function openCtx(e, i) {
+  ctxIdx = i; ctx.classList.add('show');
+  ctx.style.left = Math.min(e.clientX, window.innerWidth - 160) + 'px';
+  ctx.style.top  = Math.min(e.clientY, window.innerHeight - 80)  + 'px';
+}
+function closeCtx() { ctx.classList.remove('show'); ctxIdx = -1; }
+document.addEventListener('click', () => closeCtx());
+ctx.addEventListener('click', e => e.stopPropagation());
+document.getElementById('ctx-dl').addEventListener('click', () => {
+  if (ctxIdx >= 0) { downloadImg(IMAGES[ctxIdx]); closeCtx(); }
 });
 
-async function downloadImg(img){
-  try{
-    const res=await fetch(img.src);
-    const blob=await res.blob();
-    const url=URL.createObjectURL(blob);
-    const a=document.createElement('a');a.href=url;a.download=img.filename;
-    document.body.appendChild(a);a.click();document.body.removeChild(a);
-    setTimeout(()=>URL.revokeObjectURL(url),2000);
-  }catch{
-    const a=document.createElement('a');a.href=img.src;a.download=img.filename;
-    document.body.appendChild(a);a.click();document.body.removeChild(a);
+async function downloadImg(img) {
+  try {
+    const res  = await fetch(img.src);
+    const blob = await res.blob();
+    const url  = URL.createObjectURL(blob);
+    const a = document.createElement('a'); a.href = url; a.download = img.filename;
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    setTimeout(() => URL.revokeObjectURL(url), 2000);
+  } catch {
+    const a = document.createElement('a'); a.href = img.src; a.download = img.filename;
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
   }
 }
 
-function openLB(i){cur=i;showImg();lb.classList.remove('off');}
-function showImg(){
-  lbImg.classList.remove('rdy');lbSpin.style.display='block';lbImg.src='';
-  const img=IMAGES[cur];
-  lbImg.onload=()=>{lbSpin.style.display='none';lbImg.classList.add('rdy');};
-  lbImg.src=img.src;
-  lbFoot.textContent=(cur+1)+' / '+IMAGES.length+' · '+img.filename;
+/* ── Lightbox ── */
+function openLB(i) { cur = i; showImg(); lb.classList.remove('off'); }
+function showImg() {
+  lbImg.classList.remove('rdy'); lbSpin.style.display = 'block'; lbImg.src = '';
+  const img = IMAGES[cur];
+  lbImg.onload = () => { lbSpin.style.display = 'none'; lbImg.classList.add('rdy'); };
+  lbImg.src = img.src;
+  lbFoot.textContent = (cur + 1) + ' / ' + IMAGES.length + ' · ' + img.filename;
 }
-function closeLB(){lb.classList.add('off');lbImg.src='';}
-function prev(){cur=(cur-1+IMAGES.length)%IMAGES.length;showImg();}
-function next(){cur=(cur+1)%IMAGES.length;showImg();}
+function closeLB() { lb.classList.add('off'); lbImg.src = ''; }
+function prev() { cur = (cur - 1 + IMAGES.length) % IMAGES.length; showImg(); }
+function next() { cur = (cur + 1) % IMAGES.length; showImg(); }
 
-document.getElementById('lb-close').onclick=closeLB;
-document.getElementById('lb-prev').onclick=prev;
-document.getElementById('lb-next').onclick=next;
-lb.addEventListener('click',e=>{if(e.target===lb)closeLB();});
-document.addEventListener('keydown',e=>{
-  if(lb.classList.contains('off'))return;
-  if(e.key==='Escape')closeLB();
-  if(e.key==='ArrowLeft')prev();
-  if(e.key==='ArrowRight')next();
+document.getElementById('lb-close').onclick = closeLB;
+document.getElementById('lb-prev').onclick  = prev;
+document.getElementById('lb-next').onclick  = next;
+lb.addEventListener('click', e => { if (e.target === lb) closeLB(); });
+document.addEventListener('keydown', e => {
+  if (lb.classList.contains('off')) return;
+  if (e.key === 'Escape')     closeLB();
+  if (e.key === 'ArrowLeft')  prev();
+  if (e.key === 'ArrowRight') next();
 });
-
-renderGrid();
 </script>
 </body>
 </html>`;
@@ -766,6 +905,7 @@ const createWindow = () => {
 };
 
 app.whenReady().then(() => {
+  startBackends();
   registerGmailIpc({ app, ipcMain, shell });
   createWindow();
 

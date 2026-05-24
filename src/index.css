@@ -2428,12 +2428,12 @@ select {
     0 0 160px rgba(0, 0, 0, 0.28) inset;
 }
 
-/* Camera: landscape 1620×1080 frame — overrides the default portrait ratio */
+/* Camera: 1620×1320 frame — user sees wide view, API receives silent 1080×1320 center crop */
 .camera-screen .kiosk-portrait-frame.kiosk-flow-frame {
-  --frame-max-w: min(96vw, calc((100dvh - 120px) * 1620 / 1080));
+  --frame-max-w: min(96vw, calc((100dvh - 120px) * 1620 / 1320));
   width: var(--frame-max-w);
-  height: calc(var(--frame-max-w) * 1080 / 1620);
-  aspect-ratio: 1620 / 1080;
+  height: calc(var(--frame-max-w) * 1320 / 1620);
+  aspect-ratio: 1620 / 1320;
   max-height: calc(100dvh - 120px);
   max-width: 96vw;
 }

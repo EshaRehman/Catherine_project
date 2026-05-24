@@ -21,8 +21,8 @@ export function CameraScreen({ onCapture, onBack }) {
           video: {
             facingMode: 'user',
             width: { ideal: 1620 },
-            height: { ideal: 1080 },
-            aspectRatio: { ideal: 1620 / 1080 },
+            height: { ideal: 1320 },
+            aspectRatio: { ideal: 1620 / 1320 },
           },
           audio: false,
         });
@@ -88,20 +88,37 @@ export function CameraScreen({ onCapture, onBack }) {
     if (!video || !video.videoWidth || !streamReady) return;
     const vw = video.videoWidth;
     const vh = video.videoHeight;
-    const outW = 1620;
-    const outH = 1080;
+
+    // Visible viewport shown to user: 1620×1320
+    const viewW = 1620;
+    const viewH = 1320;
+
+    // Image sent to API: center crop of the viewport — 1080×1320 (portrait)
+    const outW = 1080;
+    const outH = 1320;
+
+    // Scale video to cover the full 1620×1320 visible frame
+    const scale = Math.max(viewW / vw, viewH / vh);
+    const scaledW = vw * scale;
+    const scaledH = vh * scale;
+
+    // Center the scaled video within the 1620×1320 frame
+    const dxView = (viewW - scaledW) / 2;
+    const dyView = (viewH - scaledH) / 2;
+
+    // Crop offset: take the center 1080px horizontally (270px from each side)
+    const cropX = (viewW - outW) / 2; // = 270
+    const cropY = (viewH - outH) / 2; // = 0
+
+    // Draw into the 1080×1320 canvas shifted by the crop offset
     const canvas = document.createElement('canvas');
     canvas.width = outW;
     canvas.height = outH;
     const ctx = canvas.getContext('2d', { alpha: false });
     ctx.fillStyle = '#000';
     ctx.fillRect(0, 0, outW, outH);
-    const scale = Math.max(outW / vw, outH / vh);
-    const dw = vw * scale;
-    const dh = vh * scale;
-    const dx = (outW - dw) / 2;
-    const dy = (outH - dh) / 2;
-    ctx.drawImage(video, 0, 0, vw, vh, dx, dy, dw, dh);
+    ctx.drawImage(video, 0, 0, vw, vh, dxView - cropX, dyView - cropY, scaledW, scaledH);
+
     const dataUrl = canvas.toDataURL('image/jpeg', 0.92);
     streamRef.current?.getTracks().forEach((tr) => tr.stop());
     streamRef.current = null;
