@@ -22,18 +22,28 @@ Set-ExecutionPolicy -ExecutionPolicy Bypass -Scope Process -Force
 # ================================================================
 
 $INSTALL_DRIVE     = "C"
-$APP_DIR           = "$($INSTALL_DRIVE):\APP-Electron"
-$ELECTRON_DIR      = "$($INSTALL_DRIVE):\Catherine_project"
+$BASE_DIR          = "$($INSTALL_DRIVE):\PhotoBoothApp"          # ← single parent folder for BOTH repos
+$APP_DIR           = "$BASE_DIR\APP-Electron"                    # PhotoBooth backend + ComfyUI
+$ELECTRON_DIR      = "$BASE_DIR\Catherine_project"               # Electron frontend
 
 $ELECTRON_REPO     = "https://github.com/EshaRehman/Catherine_project"
 $BACKEND_REPO      = "https://github.com/SheikhAnas999/PhotoBooth.git"
 # ComfyUI is already inside the PhotoBooth repo -- no separate clone needed
+
+# ── MongoDB Cloud Backup ─────────────────────────────────────────
+# GitHub Release: SheikhAnas999/PhotoBooth → tag: mngdb
+# Asset        : Catherine-MongoDB-Backup.zip
+#
+$MONGO_BACKUP_URL  = "https://github.com/user-attachments/files/28187986/Catherine-MongoDB-Backup.zip"
 
 $PYTHON_URL        = "https://www.python.org/ftp/python/3.10.8/python-3.10.8-amd64.exe"
 
 $MONGODB_VERSION   = "8.0.4"
 $MONGODB_URL       = "https://fastdl.mongodb.org/windows/mongodb-windows-x86_64-8.0.4-signed.msi"
 $MONGODB_TOOLS_URL = "https://fastdl.mongodb.org/tools/db/mongodb-database-tools-windows-x86_64-100.10.0.zip"
+
+# ── Set to $true to skip model downloads (all other steps still run) ──
+$SKIP_MODELS       = $false
 
 # -- AI Models -- direct download URLs ---------------------------
 $MODELS = @(
@@ -123,8 +133,9 @@ Write-Host "   CATHERINE PHOTO BOOTH -- NEW PC SETUP               " -Foreground
 Write-Host "   Installs everything automatically                    " -ForegroundColor Cyan
 Write-Host "========================================================" -ForegroundColor Cyan
 Write-Host ""
-Write-Host "Install location : $APP_DIR"
-Write-Host "Electron app     : $ELECTRON_DIR"
+Write-Host "Install root     : $BASE_DIR"
+Write-Host "  Backend + ComfyUI : $APP_DIR"
+Write-Host "  Electron app      : $ELECTRON_DIR"
 Write-Host ""
 Write-Host "This will install:"
 Write-Host "  * Python 3.10.8"
@@ -327,13 +338,16 @@ if (-not (Test-Path $mongodumpExe)) {
 
 Write-Step "6/9" "Cloning repositories from GitHub"
 
+# Make sure the single common parent folder exists
+Ensure-Dir $BASE_DIR
+Write-OK "Common parent folder ready: $BASE_DIR"
+
 # 6a -- Electron app
 if (Test-Path "$ELECTRON_DIR\.git") {
     Write-OK "Electron repo already cloned -- pulling latest ..."
     git -C $ELECTRON_DIR pull --quiet
 } else {
-    Write-Info "Cloning Electron app ..."
-    Ensure-Dir (Split-Path $ELECTRON_DIR)
+    Write-Info "Cloning Electron app into $ELECTRON_DIR ..."
     git clone $ELECTRON_REPO $ELECTRON_DIR
     Write-OK "Electron app cloned to: $ELECTRON_DIR"
 }
@@ -343,8 +357,7 @@ if (Test-Path "$APP_DIR\.git") {
     Write-OK "PhotoBooth repo already cloned -- pulling latest ..."
     git -C $APP_DIR pull --quiet
 } else {
-    Write-Info "Cloning PhotoBooth repo (Backend + ComfyUI) ..."
-    Ensure-Dir (Split-Path $APP_DIR)
+    Write-Info "Cloning PhotoBooth repo (Backend + ComfyUI) into $APP_DIR ..."
     git clone $BACKEND_REPO $APP_DIR
     Write-OK "PhotoBooth cloned to: $APP_DIR"
 }
@@ -379,9 +392,9 @@ function Find-Python310 {
     return $null
 }
 
-# ---- 7a: Backend venv (C:\APP-Electron\venv) ----
+# ---- 7a: Backend venv ----
 Write-Host ""
-Write-Host "  [7a] Backend venv -- C:\APP-Electron\venv" -ForegroundColor Cyan
+Write-Host "  [7a] Backend venv -- $APP_DIR\venv" -ForegroundColor Cyan
 
 $venvDir  = "$APP_DIR\venv"
 $venvPy   = "$venvDir\Scripts\python.exe"
@@ -410,9 +423,9 @@ if (Test-Path $reqFile) {
     Write-Warn "Backend requirements.txt not found at: $reqFile"
 }
 
-# ---- 7b: ComfyUI venv (C:\APP-Electron\ComfyUI\venv) ----
+# ---- 7b: ComfyUI venv ----
 Write-Host ""
-Write-Host "  [7b] ComfyUI venv -- C:\APP-Electron\ComfyUI\venv" -ForegroundColor Cyan
+Write-Host "  [7b] ComfyUI venv -- $APP_DIR\ComfyUI\venv" -ForegroundColor Cyan
 
 $comfyVenvDir  = "$APP_DIR\ComfyUI\venv"
 $comfyVenvPy   = "$comfyVenvDir\Scripts\python.exe"
@@ -451,6 +464,11 @@ Write-OK "npm packages installed"
 # ================================================================
 #   STEP 8 -- Download AI Models
 # ================================================================
+
+if ($SKIP_MODELS) {
+    Write-Step "8/9" "Downloading AI Models  [SKIPPED -- set `$SKIP_MODELS = `$false to enable]"
+    Write-Warn "Model downloads skipped. Set `$SKIP_MODELS = `$false at the top of this script to download them."
+} else {
 
 Write-Step "8/9" "Downloading AI Models"
 Write-Host "       Total: ~31 GB -- may take 1-3 hours" -ForegroundColor Yellow
@@ -547,44 +565,85 @@ foreach ($model in $MODELS) {
     }
 }
 
+} # end if (-not $SKIP_MODELS)
+
 # ================================================================
 #   STEP 9 -- Restore MongoDB Backup
 # ================================================================
 
 Write-Step "9/9" "Restoring MongoDB Data"
 
-Write-Host "Do you have a MongoDB backup from your OLD PC?" -ForegroundColor Yellow
-Write-Host "(Made by 1_BACKUP_OLD_PC.bat -- folder: Catherine-MongoDB-Backup)" -ForegroundColor Gray
-$hasBackup = Read-Host "Restore database? [Y/n]"
+$mongorestore = "C:\Program Files\MongoDB\Tools\100\bin\mongorestore.exe"
+if (-not (Test-Path $mongorestore)) { $mongorestore = "mongorestore" }
 
-if ($hasBackup -ne "n" -and $hasBackup -ne "N") {
-    $backupPath = (Read-Host "Full path to backup folder (e.g. E:\Catherine-MongoDB-Backup)").Trim()
-
-    if (-not (Test-Path $backupPath)) {
-        Write-Err "Path not found: $backupPath"
-        Write-Warn "You can restore later with:"
-        Write-Warn "  mongorestore --uri=mongodb://localhost:27017 --db=PhotoBooth <path>\PhotoBooth --gzip"
-    } else {
-        $mongorestore = "C:\Program Files\MongoDB\Tools\100\bin\mongorestore.exe"
-        if (-not (Test-Path $mongorestore)) { $mongorestore = "mongorestore" }
-
-        $dbBackup = "$backupPath\PhotoBooth"
-        if (-not (Test-Path $dbBackup)) {
-            $found = Get-ChildItem $backupPath -Recurse -Directory -Filter "PhotoBooth" |
-                     Select-Object -First 1
-            if ($found) { $dbBackup = $found.FullName }
-        }
-
-        if ($dbBackup -and (Test-Path $dbBackup)) {
-            Write-Info "Restoring PhotoBooth database ..."
-            & $mongorestore --uri="mongodb://localhost:27017" --db=PhotoBooth $dbBackup --gzip --drop
-            Write-OK "MongoDB PhotoBooth database restored!"
-        } else {
-            Write-Warn "Could not find PhotoBooth folder inside: $backupPath"
-        }
+function Restore-FromFolder { param($backupPath)
+    $dbBackup = "$backupPath\PhotoBooth"
+    if (-not (Test-Path $dbBackup)) {
+        $found = Get-ChildItem $backupPath -Recurse -Directory -Filter "PhotoBooth" | Select-Object -First 1
+        if ($found) { $dbBackup = $found.FullName }
     }
-} else {
-    Write-Info "Skipped -- starting with empty database"
+    if ($dbBackup -and (Test-Path $dbBackup)) {
+        Write-Info "Restoring PhotoBooth database ..."
+        & $mongorestore --uri="mongodb://localhost:27017" --db=PhotoBooth $dbBackup --gzip --drop
+        Write-OK "MongoDB PhotoBooth database restored!"
+        return $true
+    }
+    Write-Warn "Could not find PhotoBooth folder inside: $backupPath"
+    return $false
+}
+
+# ── Try cloud restore first ───────────────────────────────────────
+$cloudRestored = $false
+
+if ($MONGO_BACKUP_URL -ne "") {
+    Write-Host "  Downloading MongoDB backup from GitHub Releases ..." -ForegroundColor Cyan
+    Write-Info "  URL: $MONGO_BACKUP_URL"
+
+    $backupZip   = "$env:TEMP\Catherine-MongoDB-Backup.zip"
+    $backupDir   = "$env:TEMP\Catherine-MongoDB-Restore"
+
+    try {
+        # Download
+        Write-Info "Downloading from GitHub Releases ..."
+        $wc = New-Object System.Net.WebClient
+        $wc.DownloadFile($MONGO_BACKUP_URL, $backupZip)
+        Write-OK "Backup downloaded: $backupZip"
+
+        # Extract the zip
+        Ensure-Dir $backupDir
+        Write-Info "Extracting backup ..."
+        Expand-Archive -Path $backupZip -DestinationPath $backupDir -Force
+        Write-OK "Backup extracted to: $backupDir"
+
+        $cloudRestored = Restore-FromFolder $backupDir
+    } catch {
+        Write-Warn "Cloud download/restore failed: $_"
+        Write-Warn "Falling back to manual restore..."
+    }
+}
+
+# ── Fall back to manual restore if cloud didn't work ─────────────
+if (-not $cloudRestored) {
+    Write-Host ""
+    Write-Host "  No cloud backup URL configured (or download failed)." -ForegroundColor Yellow
+    Write-Host "  Do you have a local MongoDB backup folder?" -ForegroundColor Yellow
+    Write-Host "  (Made by 1_BACKUP_OLD_PC.bat -- folder: Catherine-MongoDB-Backup)" -ForegroundColor Gray
+    $hasBackup = Read-Host "  Restore from local folder? [Y/n]"
+
+    if ($hasBackup -ne "n" -and $hasBackup -ne "N") {
+        $backupPath = (Read-Host "  Full path to backup folder (e.g. E:\Catherine-MongoDB-Backup)").Trim()
+
+        if (-not (Test-Path $backupPath)) {
+            Write-Err "Path not found: $backupPath"
+            Write-Warn "Restore later with:"
+            Write-Warn "  mongorestore --uri=mongodb://localhost:27017 --db=PhotoBooth <path>\PhotoBooth --gzip"
+        } else {
+            Restore-FromFolder $backupPath | Out-Null
+        }
+    } else {
+        Write-Info "Skipped -- starting with empty database"
+        Write-Info "To enable auto-restore on next PC, set `$MONGO_BACKUP_URL at the top of this script."
+    }
 }
 
 # ================================================================
@@ -607,7 +666,7 @@ Write-Host "========================================================" -Foregroun
 Write-Host "   SETUP COMPLETE!                                      " -ForegroundColor Green
 Write-Host "========================================================" -ForegroundColor Green
 Write-Host ""
-Write-Host "Installed to:"
+Write-Host "Installed to: $BASE_DIR"
 Write-Host "  Backend + ComfyUI : $APP_DIR"
 Write-Host "  Electron app      : $ELECTRON_DIR"
 Write-Host ""
