@@ -22,7 +22,7 @@ if (require('electron-squirrel-startup')) {
 // Dev machine  : D:\APP-Electron  (checked first)
 // Production   : C:\APP-Electron  (setup script installs here)
 function resolveAppDir() {
-  const candidates = ['D:\\APP-Electron', 'C:\\APP-Electron'];
+  const candidates = ['D:\\APP-Electron', 'C:\\PhotoBoothApp\\APP-Electron', 'C:\\APP-Electron'];
   for (const dir of candidates) {
     if (fs.existsSync(dir)) {
       console.log('[Backend] Using APP-Electron at:', dir);
