@@ -70,7 +70,7 @@ $MODELS = @(
     @{
         Name = "YOLO11x Object Detection Model (109 MB)"
         URL  = "https://huggingface.co/Ultralytics/YOLO11/resolve/a01aaa06caeff788b052e193acb76b3f21571b3a/yolo11x.pt"
-        DEST = "$APP_DIR\yolo11x.pt"
+        DEST = "$APP_DIR\Backend(Fast-API)\yolo11x.pt"
     }
 )
 
