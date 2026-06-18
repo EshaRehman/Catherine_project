@@ -39,11 +39,11 @@ export function ProcessingScreen({ subjectDataUrl, template, eventId, onDone }) 
         }
 
         if (video) { video.loop = false; video.pause(); }
-        onDone(finalUrl);
+        onDone(finalUrl, result.data.cloudinary_url || null);
       } else {
         console.error('[ProcessingScreen] generate failed:', result.error);
         if (video) { video.loop = false; video.pause(); }
-        onDone(subjectDataUrl);
+        onDone(subjectDataUrl, null);
       }
     };
 

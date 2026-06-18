@@ -176,6 +176,74 @@ const PEOPLE_PROMPT_MAX = 10000;
 
 const defaultPeoplePrompts = () => ({ 1: '', 2: '', 3: '', 4: '', 5: '' });
 
+const SCENE_VAR_FIELDS = [
+  { key: 'poses',       label: 'Poses',       placeholder: 'e.g. commanding', token: '{pose}' },
+  { key: 'expressions', label: 'Expressions', placeholder: 'e.g. smiling',    token: '{expression}' },
+  { key: 'sizes',       label: 'Sizes',       placeholder: 'e.g. 50%',        token: '{size}' },
+  { key: 'placements',  label: 'Placements',  placeholder: 'e.g. center',     token: '{placement}' },
+];
+
+function TagInput({ label, token, placeholder, items, onChange }) {
+  const [input, setInput] = useState('');
+
+  const add = () => {
+    const val = input.trim();
+    if (!val || items.includes(val)) return;
+    onChange([...items, val]);
+    setInput('');
+  };
+
+  const remove = (idx) => onChange(items.filter((_, i) => i !== idx));
+
+  return (
+    <div className="field field--full">
+      <div className="field-heading">
+        {label} <code style={{ fontSize: 11, opacity: 0.6, fontWeight: 400, marginLeft: 4 }}>{token}</code>
+      </div>
+      <div style={{ display: 'flex', gap: 6, marginBottom: 6 }}>
+        <input
+          className="input"
+          style={{ flex: 1 }}
+          value={input}
+          placeholder={placeholder}
+          onChange={(e) => setInput(e.target.value)}
+          onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); add(); } }}
+        />
+        <button type="button" className="btn btn-ghost" style={{ flexShrink: 0 }} onClick={add}>
+          Add
+        </button>
+      </div>
+      {items.length > 0 && (
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+          {items.map((item, idx) => (
+            <span
+              key={idx}
+              style={{
+                display: 'inline-flex', alignItems: 'center', gap: 5,
+                background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.14)',
+                borderRadius: 6, padding: '3px 8px', fontSize: 12, color: '#ccc',
+              }}
+            >
+              {item}
+              <button
+                type="button"
+                onClick={() => remove(idx)}
+                style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#888', fontSize: 13, padding: 0, lineHeight: 1 }}
+                aria-label={`Remove ${item}`}
+              >
+                ✕
+              </button>
+            </span>
+          ))}
+        </div>
+      )}
+      {items.length === 0 && (
+        <p className="field-help">No options yet — one will be picked randomly at generation time.</p>
+      )}
+    </div>
+  );
+}
+
 export function TemplateEditor() {
   const {
     editorTemplateId,
@@ -197,6 +265,10 @@ export function TemplateEditor() {
   const [basePrompt, setBasePrompt] = useState('');
   const [numberOfPeople, setNumberOfPeople] = useState(1);
   const [peoplePrompts, setPeoplePrompts] = useState(defaultPeoplePrompts);
+  const [poses, setPoses] = useState([]);
+  const [expressions, setExpressions] = useState([]);
+  const [sizes, setSizes] = useState([]);
+  const [placements, setPlacements] = useState([]);
   const [saveStatus, setSaveStatus] = useState(null); // null | 'saving' | 'error'
   const [saveError, setSaveError] = useState('');
   const [loading, setLoading] = useState(false);
@@ -209,6 +281,10 @@ export function TemplateEditor() {
   const peoplePromptsRef = useRef(peoplePrompts);
   const numberOfPeopleRef = useRef(numberOfPeople);
   const draftRef = useRef(draft);
+  const posesRef = useRef(poses);
+  const expressionsRef = useRef(expressions);
+  const sizesRef = useRef(sizes);
+  const placementsRef = useRef(placements);
 
   const updatePeoplePrompt = (count, value) => {
     setPeoplePrompts((prev) => ({ ...prev, [count]: value }));
@@ -249,6 +325,10 @@ export function TemplateEditor() {
           if (t.peoplePrompts) {
              setPeoplePrompts({...defaultPeoplePrompts(), ...t.peoplePrompts});
           }
+          setPoses(Array.isArray(t.poses) ? t.poses : []);
+          setExpressions(Array.isArray(t.expressions) ? t.expressions : []);
+          setSizes(Array.isArray(t.sizes) ? t.sizes : []);
+          setPlacements(Array.isArray(t.placements) ? t.placements : []);
         } else {
            // Handle error finding it
            setDraft(createDefaultTemplate());
@@ -296,6 +376,10 @@ export function TemplateEditor() {
   useEffect(() => { peoplePromptsRef.current = peoplePrompts; }, [peoplePrompts]);
   useEffect(() => { numberOfPeopleRef.current = numberOfPeople; }, [numberOfPeople]);
   useEffect(() => { draftRef.current = draft; }, [draft]);
+  useEffect(() => { posesRef.current = poses; }, [poses]);
+  useEffect(() => { expressionsRef.current = expressions; }, [expressions]);
+  useEffect(() => { sizesRef.current = sizes; }, [sizes]);
+  useEffect(() => { placementsRef.current = placements; }, [placements]);
 
   // Live idle preview: re-render whenever draft settings change
   useEffect(() => {
@@ -358,8 +442,19 @@ export function TemplateEditor() {
     camStreamRef.current?.getTracks().forEach(t => t.stop());
     camStreamRef.current = null;
 
-    const combined = [basePromptRef.current, peoplePromptsRef.current[numberOfPeopleRef.current]]
-      .map(s => (s || '').trim()).filter(Boolean).join(' ');
+    const pickRandom = (arr) => arr.length ? arr[Math.floor(Math.random() * arr.length)] : null;
+    let combined = (peoplePromptsRef.current[numberOfPeopleRef.current] || '').trim();
+    const sceneVarMap = {
+      '{pose}': posesRef.current,
+      '{expression}': expressionsRef.current,
+      '{size}': sizesRef.current,
+      '{placement}': placementsRef.current,
+    };
+    for (const [token, options] of Object.entries(sceneVarMap)) {
+      if (combined.includes(token) && options.length) {
+        combined = combined.replace(token, pickRandom(options));
+      }
+    }
 
     setPreviewPhase('processing');
     setPreviewError(null);
@@ -475,7 +570,7 @@ export function TemplateEditor() {
     // Build the API payload
     const payload = {
       name: draft.name || 'Untitled',
-      basePrompt,
+      basePrompt: '',
       peoplePrompts: {
         1: peoplePrompts[1] || '',
         2: peoplePrompts[2] || '',
@@ -483,6 +578,10 @@ export function TemplateEditor() {
         4: peoplePrompts[4] || '',
         5: peoplePrompts[5] || '',
       },
+      poses,
+      expressions,
+      sizes,
+      placements,
       overlayText: draft.overlayText || '',
       fontFamily: draft.fontFamily || '',
       fontSize: draft.fontSize || 42,
@@ -746,7 +845,7 @@ export function TemplateEditor() {
               />
             </div>
 
-            {/* Base Prompt sub-card */}
+            {/* Base Prompt per person count sub-card */}
             <div className="gen-sub-card">
               <div className="gen-sub-card__header">
                 <span className="gen-sub-card__icon" aria-hidden>
@@ -760,42 +859,11 @@ export function TemplateEditor() {
                 </span>
                 <div>
                   <div className="gen-sub-card__title">Base Prompt</div>
-                  <div className="gen-sub-card__desc">Enter the base prompt that will be used as a scene and outfit description for the generated image.</div>
-                </div>
-              </div>
-              <div className="gen-sub-card__body">
-                <textarea
-                  id="base-prompt"
-                  className="textarea gen-sub-card__textarea"
-                  rows={4}
-                  maxLength={BASE_PROMPT_MAX}
-                  value={basePrompt}
-                  onChange={(e) => setBasePrompt(e.target.value)}
-                  placeholder="Enter your base prompt here..."
-                />
-                <div className="gen-sub-card__counter">{basePrompt.length}/{BASE_PROMPT_MAX}</div>
-              </div>
-            </div>
-
-            {/* Number of People sub-card */}
-            <div className="gen-sub-card">
-              <div className="gen-sub-card__header">
-                <span className="gen-sub-card__icon" aria-hidden>
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
-                    <circle cx="9" cy="7" r="4" />
-                    <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
-                    <path d="M16 3.13a4 4 0 0 1 0 7.75" />
-                  </svg>
-                </span>
-                <div>
-                  <div className="gen-sub-card__title">Number of People</div>
-                  <div className="gen-sub-card__desc">Write a description for each person in the image.</div>
+                  <div className="gen-sub-card__desc">Select a person count then write the full prompt for that count. Use <code style={{ fontSize: 11 }}>{'{pose}'}</code>, <code style={{ fontSize: 11 }}>{'{expression}'}</code>, <code style={{ fontSize: 11 }}>{'{size}'}</code>, <code style={{ fontSize: 11 }}>{'{placement}'}</code> as placeholders.</div>
                 </div>
               </div>
               <div className="gen-sub-card__body">
                 <select
-                  id="num-people"
                   className="select gen-sub-card__select"
                   value={numberOfPeople}
                   onChange={(e) => setNumberOfPeople(Number(e.target.value))}
@@ -804,45 +872,21 @@ export function TemplateEditor() {
                     <option key={o.value} value={o.value}>{o.label}</option>
                   ))}
                 </select>
-              </div>
-            </div>
-
-            {/* Generated Prompt sub-card — editable per person count */}
-            <div className="gen-sub-card">
-              <div className="gen-sub-card__header">
-                <span className="gen-sub-card__icon" aria-hidden>
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M12 2L2 7l10 5 10-5-10-5z" />
-                    <path d="M2 17l10 5 10-5" />
-                    <path d="M2 12l10 5 10-5" />
-                  </svg>
-                </span>
-                <div>
-                  <div className="gen-sub-card__title">Generated Prompt</div>
-                  <div className="gen-sub-card__desc">
-                    Write the prompt for{' '}
-                    <strong>{PEOPLE_OPTIONS.find((o) => o.value === numberOfPeople)?.label}</strong>.
-                    Switch the dropdown above to edit a different count.
-                  </div>
-                </div>
-              </div>
-              <div className="gen-sub-card__body">
                 <textarea
-                  id="generated-prompt"
                   className="textarea gen-sub-card__textarea"
-                  rows={4}
+                  style={{ marginTop: 10 }}
+                  rows={6}
                   maxLength={PEOPLE_PROMPT_MAX}
                   value={peoplePrompts[numberOfPeople]}
                   onChange={(e) => updatePeoplePrompt(numberOfPeople, e.target.value)}
-                  placeholder={`Enter prompt for ${PEOPLE_OPTIONS.find((o) => o.value === numberOfPeople)?.label.toLowerCase()}...`}
+                  placeholder={`Enter base prompt for ${PEOPLE_OPTIONS.find((o) => o.value === numberOfPeople)?.label.toLowerCase()}…`}
                 />
                 <div className="gen-sub-card__counter gen-sub-card__counter--row">
                   <span className="gen-sub-card__filled-pills">
                     {PEOPLE_OPTIONS.map((o) => (
                       <span
                         key={o.value}
-                        className={`gen-pill ${o.value === numberOfPeople ? 'gen-pill--active' : ''
-                          } ${peoplePrompts[o.value].trim() ? 'gen-pill--filled' : ''}`}
+                        className={`gen-pill ${o.value === numberOfPeople ? 'gen-pill--active' : ''} ${peoplePrompts[o.value].trim() ? 'gen-pill--filled' : ''}`}
                         onClick={() => setNumberOfPeople(o.value)}
                         title={o.label}
                       >
@@ -854,6 +898,41 @@ export function TemplateEditor() {
                 </div>
               </div>
             </div>
+
+            {/* Scene Variables sub-card */}
+            <div className="gen-sub-card">
+              <div className="gen-sub-card__header">
+                <span className="gen-sub-card__icon" aria-hidden>
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <circle cx="12" cy="12" r="3" />
+                    <path d="M19.07 4.93a10 10 0 0 1 0 14.14M4.93 4.93a10 10 0 0 0 0 14.14" />
+                  </svg>
+                </span>
+                <div>
+                  <div className="gen-sub-card__title">Scene Variables</div>
+                  <div className="gen-sub-card__desc">
+                    Add options for each variable. At generation time one is picked at random and replaces the matching token in your base prompt (e.g. <code style={{ fontSize: 11 }}>{'{pose}'}</code>).
+                  </div>
+                </div>
+              </div>
+              <div className="gen-sub-card__body" style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+                {SCENE_VAR_FIELDS.map((field) => {
+                  const stateMap = { poses, expressions, sizes, placements };
+                  const setterMap = { poses: setPoses, expressions: setExpressions, sizes: setSizes, placements: setPlacements };
+                  return (
+                    <TagInput
+                      key={field.key}
+                      label={field.label}
+                      token={field.token}
+                      placeholder={field.placeholder}
+                      items={stateMap[field.key]}
+                      onChange={setterMap[field.key]}
+                    />
+                  );
+                })}
+              </div>
+            </div>
+
           </section>
 
 

@@ -19,6 +19,7 @@ export function KioskApp() {
   const [selectedTemplateId, setSelectedTemplateId] = useState(null);
   const [subjectDataUrl, setSubjectDataUrl] = useState(null);
   const [resultDataUrl, setResultDataUrl] = useState(null);
+  const [downloadUrl, setDownloadUrl] = useState(null);
   const [adminModal, setAdminModal] = useState(false);
   const [dbEvents, setDbEvents] = useState([]);
   const [dbTemplates, setDbTemplates] = useState([]);
@@ -115,6 +116,7 @@ export function KioskApp() {
     setSelectedTemplateId(null);
     setSubjectDataUrl(null);
     setResultDataUrl(null);
+    setDownloadUrl(null);
   }, []);
 
   return (
@@ -158,8 +160,9 @@ export function KioskApp() {
           subjectDataUrl={subjectDataUrl}
           template={selectedTemplate}
           eventId={activeEvent?.id || null}
-          onDone={(url) => {
+          onDone={(url, dlUrl) => {
             setResultDataUrl(url);
+            setDownloadUrl(dlUrl);
             setPhase('result');
           }}
         />
@@ -180,7 +183,7 @@ export function KioskApp() {
 
       {phase === 'qr' && resultDataUrl && (
         <QRScreen
-          payload={`catherine://share/${Date.now()}`}
+          payload={downloadUrl || resultDataUrl}
           onDone={resetFlow}
         />
       )}
