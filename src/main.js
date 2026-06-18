@@ -173,8 +173,11 @@ ipcMain.handle('api-request', async (_event, { method, url, payload }) => {
 
 ipcMain.handle('api-generate', async (_event, { url, imageBase64, templateId, eventId, seed }) => {
   return new Promise((resolve, reject) => {
-    // Strip the data URL prefix to get raw base64
-    const base64Data = imageBase64.replace(/^data:image\/\w+;base64,/, '');
+    const mimeMatch = imageBase64.match(/^data:(image\/[\w+.-]+);base64,/);
+    const mime = mimeMatch ? mimeMatch[1] : 'image/jpeg';
+    const ext  = mime === 'image/png' ? 'png' : 'jpg';
+
+    const base64Data = imageBase64.replace(/^data:image\/[\w+.-]+;base64,/, '');
     const imageBuffer = Buffer.from(base64Data, 'base64');
 
     const boundary = `----FormBoundary${Date.now().toString(16)}`;
@@ -186,8 +189,8 @@ ipcMain.handle('api-generate', async (_event, { url, imageBase64, templateId, ev
     // image field
     parts.push(
       `--${boundary}${CRLF}` +
-      `Content-Disposition: form-data; name="image"; filename="capture.jpg"${CRLF}` +
-      `Content-Type: image/jpeg${CRLF}${CRLF}`
+      `Content-Disposition: form-data; name="image"; filename="capture.${ext}"${CRLF}` +
+      `Content-Type: ${mime}${CRLF}${CRLF}`
     );
 
     // template_id field
@@ -264,15 +267,19 @@ ipcMain.handle('api-generate', async (_event, { url, imageBase64, templateId, ev
 
 ipcMain.handle('api-preview-image', async (_event, { imageBase64, prompt, seed }) => {
   return new Promise((resolve, reject) => {
-    const base64Data = imageBase64.replace(/^data:image\/\w+;base64,/, '');
+    const mimeMatch = imageBase64.match(/^data:(image\/[\w+.-]+);base64,/);
+    const mime = mimeMatch ? mimeMatch[1] : 'image/jpeg';
+    const ext  = mime === 'image/png' ? 'png' : 'jpg';
+
+    const base64Data = imageBase64.replace(/^data:image\/[\w+.-]+;base64,/, '');
     const imageBuffer = Buffer.from(base64Data, 'base64');
     const boundary = `----FormBoundary${Date.now().toString(16)}`;
     const CRLF = '\r\n';
 
     const imagePartHeader = Buffer.from(
       `--${boundary}${CRLF}` +
-      `Content-Disposition: form-data; name="image"; filename="capture.jpg"${CRLF}` +
-      `Content-Type: image/jpeg${CRLF}${CRLF}`,
+      `Content-Disposition: form-data; name="image"; filename="capture.${ext}"${CRLF}` +
+      `Content-Type: ${mime}${CRLF}${CRLF}`,
       'utf8'
     );
     const imagePartFooter = Buffer.from(CRLF, 'utf8');

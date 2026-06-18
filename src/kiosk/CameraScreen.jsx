@@ -20,9 +20,9 @@ export function CameraScreen({ onCapture, onBack }) {
         const stream = await navigator.mediaDevices.getUserMedia({
           video: {
             facingMode: 'user',
-            width: { ideal: 1620 },
+            width: { ideal: 1080 },
             height: { ideal: 1320 },
-            aspectRatio: { ideal: 1620 / 1320 },
+            aspectRatio: { ideal: 1080 / 1320 },
           },
           audio: false,
         });
@@ -89,37 +89,60 @@ export function CameraScreen({ onCapture, onBack }) {
     const vw = video.videoWidth;
     const vh = video.videoHeight;
 
-    // Visible viewport shown to user: 1620×1320
-    const viewW = 1620;
-    const viewH = 1320;
-
-    // Image sent to API: center crop of the viewport — 1080×1320 (portrait)
+    // Output matches model input exactly — 1080×1320 portrait
     const outW = 1080;
     const outH = 1320;
 
-    // Scale video to cover the full 1620×1320 visible frame
-    const scale = Math.max(viewW / vw, viewH / vh);
+    // Scale to cover the output frame, center-crop any excess
+    const scale = Math.max(outW / vw, outH / vh);
     const scaledW = vw * scale;
     const scaledH = vh * scale;
+    const dx = (outW - scaledW) / 2;
+    const dy = (outH - scaledH) / 2;
 
-    // Center the scaled video within the 1620×1320 frame
-    const dxView = (viewW - scaledW) / 2;
-    const dyView = (viewH - scaledH) / 2;
-
-    // Crop offset: take the center 1080px horizontally (270px from each side)
-    const cropX = (viewW - outW) / 2; // = 270
-    const cropY = (viewH - outH) / 2; // = 0
-
-    // Draw into the 1080×1320 canvas shifted by the crop offset
     const canvas = document.createElement('canvas');
     canvas.width = outW;
     canvas.height = outH;
     const ctx = canvas.getContext('2d', { alpha: false });
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = 'high';
     ctx.fillStyle = '#000';
     ctx.fillRect(0, 0, outW, outH);
-    ctx.drawImage(video, 0, 0, vw, vh, dxView - cropX, dyView - cropY, scaledW, scaledH);
 
-    const dataUrl = canvas.toDataURL('image/jpeg', 0.92);
+    // Lift brightness and contrast to match the well-lit quality of internet reference photos.
+    // Camera images are typically underexposed compared to curated web images — this corrects that.
+    // brightness(1.10) = +10% light;  contrast(1.08) = subtle midtone separation
+    ctx.filter = 'brightness(1.10) contrast(1.08)';
+    ctx.drawImage(video, 0, 0, vw, vh, dx, dy, scaledW, scaledH);
+    ctx.filter = 'none';
+
+    // Mild unsharp-mask sharpening pass: recovers the natural softness from the camera lens
+    // and any slight motion blur, so the model sees crisp facial edges (eyes, hair, jaw).
+    // Kernel: [0,-1,0,-1,5,-1,0,-1,0] blended at 35% — noticeable but not harsh.
+    const STRENGTH = 0.35;
+    const imageData = ctx.getImageData(0, 0, outW, outH);
+    const src = imageData.data;
+    const dst = new Uint8ClampedArray(src.length);
+    dst.set(src); // border pixels are copied unchanged
+
+    for (let y = 1; y < outH - 1; y++) {
+      for (let x = 1; x < outW - 1; x++) {
+        const i = (y * outW + x) * 4;
+        const n = ((y - 1) * outW + x) * 4;
+        const s = ((y + 1) * outW + x) * 4;
+        const e = (y * outW + (x + 1)) * 4;
+        const w = (y * outW + (x - 1)) * 4;
+        for (let c = 0; c < 3; c++) {
+          const sharp = 5 * src[i + c] - src[n + c] - src[s + c] - src[e + c] - src[w + c];
+          dst[i + c] = Math.max(0, Math.min(255, Math.round((1 - STRENGTH) * src[i + c] + STRENGTH * sharp)));
+        }
+        dst[i + 3] = src[i + 3];
+      }
+    }
+    ctx.putImageData(new ImageData(dst, outW, outH), 0, 0);
+
+    // PNG = lossless — no compression artifacts before the identity model
+    const dataUrl = canvas.toDataURL('image/png');
     streamRef.current?.getTracks().forEach((tr) => tr.stop());
     streamRef.current = null;
     onCapture(dataUrl);
