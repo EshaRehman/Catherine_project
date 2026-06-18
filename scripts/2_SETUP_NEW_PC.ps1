@@ -34,7 +34,7 @@ $BACKEND_REPO      = "https://github.com/SheikhAnas999/PhotoBooth.git"
 # GitHub Release: SheikhAnas999/PhotoBooth → tag: mngdb
 # Asset        : Catherine-MongoDB-Backup.zip
 #
-$MONGO_BACKUP_URL  = "https://github.com/user-attachments/files/28187986/Catherine-MongoDB-Backup.zip"
+$MONGO_BACKUP_URL  = "https://github.com/SheikhAnas999/PhotoBooth/releases/download/mngdbv2/Catherine-MongoDB-Backup.zip"
 
 $PYTHON_URL        = "https://www.python.org/ftp/python/3.10.8/python-3.10.8-amd64.exe"
 
@@ -652,9 +652,18 @@ if (-not $cloudRestored) {
 
 $envFile = "$APP_DIR\Backend(Fast-API)\.env"
 if (-not (Test-Path $envFile)) {
-    $envContent = "mongodb_uri=mongodb://localhost:27017`nmongodb_db_name=PhotoBooth"
+    $envContent = @"
+mongodb_uri=mongodb://localhost:27017
+mongodb_db_name=PhotoBooth
+
+CLOUDINARY_CLOUD_NAME=dp8tqvcym
+CLOUDINARY_API_KEY=378454957966563
+CLOUDINARY_API_SECRET=TJtFAk4DC0UBmC31hJuypiOtmw0
+"@
     Set-Content $envFile -Value $envContent -Encoding UTF8
-    Write-OK "Created backend .env file"
+    Write-OK "Created backend .env file (MongoDB + Cloudinary)"
+} else {
+    Write-OK "Backend .env already exists -- skipping"
 }
 
 # ================================================================
