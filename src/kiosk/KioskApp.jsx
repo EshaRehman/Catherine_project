@@ -4,6 +4,7 @@ import { AdminUnlockModal } from './AdminUnlockModal.jsx';
 import { CornerLongPress } from './CornerLongPress.jsx';
 import { IdleScreen } from './IdleScreen.jsx';
 import { TemplateSelectScreen } from './TemplateSelectScreen.jsx';
+import { CameraReadyScreen } from './CameraReadyScreen.jsx';
 import { CameraScreen } from './CameraScreen.jsx';
 import { CapturePreviewScreen } from './CapturePreviewScreen.jsx';
 import { ProcessingScreen } from './ProcessingScreen.jsx';
@@ -132,9 +133,19 @@ export function KioskApp() {
           templates={kioskTemplates}
           onPick={(id) => {
             setSelectedTemplateId(id);
-            setPhase('camera');
+            setPhase('camera-ready');
           }}
           onBack={resetFlow}
+        />
+      )}
+
+      {phase === 'camera-ready' && selectedTemplate && (
+        <CameraReadyScreen
+          onReady={() => setPhase('camera')}
+          onBack={() => {
+            setSelectedTemplateId(null);
+            setPhase('templates');
+          }}
         />
       )}
 

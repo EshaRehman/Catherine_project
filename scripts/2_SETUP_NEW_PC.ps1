@@ -31,10 +31,10 @@ $BACKEND_REPO      = "https://github.com/SheikhAnas999/PhotoBooth.git"
 # ComfyUI is already inside the PhotoBooth repo -- no separate clone needed
 
 # ── MongoDB Cloud Backup ─────────────────────────────────────────
-# GitHub Release: SheikhAnas999/PhotoBooth → tag: mngdb
+# GitHub Release: SheikhAnas999/PhotoBooth → tag: mngdb3
 # Asset        : Catherine-MongoDB-Backup.zip
 #
-$MONGO_BACKUP_URL  = "https://github.com/SheikhAnas999/PhotoBooth/releases/download/mngdbv2/Catherine-MongoDB-Backup.zip"
+$MONGO_BACKUP_URL  = "https://github.com/SheikhAnas999/PhotoBooth/releases/download/mngdb3/Catherine-MongoDB-Backup.zip"
 
 $PYTHON_URL        = "https://www.python.org/ftp/python/3.10.8/python-3.10.8-amd64.exe"
 
