@@ -108,38 +108,7 @@ export function CameraScreen({ onCapture, onBack }) {
     ctx.imageSmoothingQuality = 'high';
     ctx.fillStyle = '#000';
     ctx.fillRect(0, 0, outW, outH);
-
-    // Lift brightness and contrast to match the well-lit quality of internet reference photos.
-    // Camera images are typically underexposed compared to curated web images — this corrects that.
-    // brightness(1.10) = +10% light;  contrast(1.08) = subtle midtone separation
-    ctx.filter = 'brightness(1.10) contrast(1.08)';
     ctx.drawImage(video, 0, 0, vw, vh, dx, dy, scaledW, scaledH);
-    ctx.filter = 'none';
-
-    // Mild unsharp-mask sharpening pass: recovers the natural softness from the camera lens
-    // and any slight motion blur, so the model sees crisp facial edges (eyes, hair, jaw).
-    // Kernel: [0,-1,0,-1,5,-1,0,-1,0] blended at 35% — noticeable but not harsh.
-    const STRENGTH = 0.35;
-    const imageData = ctx.getImageData(0, 0, outW, outH);
-    const src = imageData.data;
-    const dst = new Uint8ClampedArray(src.length);
-    dst.set(src); // border pixels are copied unchanged
-
-    for (let y = 1; y < outH - 1; y++) {
-      for (let x = 1; x < outW - 1; x++) {
-        const i = (y * outW + x) * 4;
-        const n = ((y - 1) * outW + x) * 4;
-        const s = ((y + 1) * outW + x) * 4;
-        const e = (y * outW + (x + 1)) * 4;
-        const w = (y * outW + (x - 1)) * 4;
-        for (let c = 0; c < 3; c++) {
-          const sharp = 5 * src[i + c] - src[n + c] - src[s + c] - src[e + c] - src[w + c];
-          dst[i + c] = Math.max(0, Math.min(255, Math.round((1 - STRENGTH) * src[i + c] + STRENGTH * sharp)));
-        }
-        dst[i + 3] = src[i + 3];
-      }
-    }
-    ctx.putImageData(new ImageData(dst, outW, outH), 0, 0);
 
     // PNG = lossless — no compression artifacts before the identity model
     const dataUrl = canvas.toDataURL('image/png');
