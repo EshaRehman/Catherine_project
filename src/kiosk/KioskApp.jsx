@@ -29,8 +29,8 @@ export function KioskApp() {
   useEffect(() => {
     const fetchData = async () => {
       const [resTemplates, resEvents] = await Promise.all([
-        getTemplates(),
-        getEvents()
+        getTemplates(settings.aiMode),
+        getEvents(settings.aiMode)
       ]);
       
       if (resTemplates.ok) {

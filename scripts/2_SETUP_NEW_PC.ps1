@@ -45,27 +45,25 @@ $MONGODB_TOOLS_URL = "https://fastdl.mongodb.org/tools/db/mongodb-database-tools
 # ── Set to $true to skip model downloads (all other steps still run) ──
 $SKIP_MODELS       = $false
 
-# -- AI Models -- direct download URLs ---------------------------
+# ── Hugging Face access token -- required for gated model repos below ──
+$HF_TOKEN          = "token"
+
+# -- AI Models -- direct download URLs (FLUX.2 Klein workflow) ---
 $MODELS = @(
     @{
-        Name = "Qwen Image Edit Diffusion Model (20 GB)"
-        URL  = "https://huggingface.co/drbaph/Qwen-Image-Edit-2511-FP8/resolve/main/qwen_image_edit_2511_fp8_e4m3fn.safetensors"
-        DEST = "$APP_DIR\ComfyUI\models\diffusion_models\qwen_image_edit_2511_fp8_e4m3fn.safetensors"
+        Name = "FLUX.2 Klein 9B FP8 Diffusion Model (~9 GB)"
+        URL  = "https://huggingface.co/black-forest-labs/FLUX.2-klein-9b-fp8/resolve/main/flux-2-klein-9b-fp8.safetensors"
+        DEST = "$APP_DIR\ComfyUI\models\unet\flux-2-klein-9b-fp8.safetensors"
     },
     @{
-        Name = "Qwen 2.5 VL Text Encoder (8.8 GB)"
-        URL  = "https://huggingface.co/f5aiteam/CLIP/resolve/main/qwen_2.5_vl_7b_fp8_scaled.safetensors"
-        DEST = "$APP_DIR\ComfyUI\models\text_encoders\qwen_2.5_vl_7b_fp8_scaled.safetensors"
+        Name = "Qwen 3 8B FP8-Mixed Text Encoder (~8.7 GB)"
+        URL  = "https://huggingface.co/smegmarip/ComfyUI/resolve/0bfd2388b93a6fdd52730b05cedfdbeae411f5cd/text_encoders/qwen_3_8b_fp8mixed.safetensors"
+        DEST = "$APP_DIR\ComfyUI\models\text_encoders\qwen_3_8b_fp8mixed.safetensors"
     },
     @{
-        Name = "Qwen Image VAE (243 MB)"
-        URL  = "https://huggingface.co/Comfy-Org/Qwen-Image_ComfyUI/resolve/main/split_files/vae/qwen_image_vae.safetensors"
-        DEST = "$APP_DIR\ComfyUI\models\vae\qwen_image_vae.safetensors"
-    },
-    @{
-        Name = "Qwen Image Lightning LoRA (1.6 GB)"
-        URL  = "https://huggingface.co/lightx2v/Qwen-Image-Lightning/resolve/main/Qwen-Image-Lightning-4steps-V1.0.safetensors"
-        DEST = "$APP_DIR\ComfyUI\models\loras\Qwen-Image-Lightning-4steps-V1.0.safetensors"
+        Name = "Flux2 VAE (~336 MB)"
+        URL  = "https://huggingface.co/Comfy-Org/flux2-dev/resolve/main/split_files/vae/flux2-vae.safetensors"
+        DEST = "$APP_DIR\ComfyUI\models\vae\flux2-vae.safetensors"
     },
     @{
         Name = "YOLO11x Object Detection Model (109 MB)"
@@ -145,11 +143,11 @@ Write-Host "  * MongoDB 8.0 (as Windows service)"
 Write-Host "  * FastAPI backend + ComfyUI (from GitHub)"
 Write-Host "  * Electron app (from GitHub)"
 Write-Host "  * All Python packages (PyTorch CUDA 12.4 etc.)"
-Write-Host "  * AI Models (~31 GB)"
+Write-Host "  * AI Models -- FLUX.2 Klein workflow (~18 GB)"
 Write-Host ""
 Write-Host "[!] REQUIREMENTS:" -ForegroundColor Yellow
 Write-Host "    * NVIDIA GPU with CUDA 12.4 drivers installed"
-Write-Host "    * ~60 GB free space on $INSTALL_DRIVE drive"
+Write-Host "    * ~45 GB free space on $INSTALL_DRIVE drive"
 Write-Host "    * Stable internet connection"
 Write-Host ""
 
@@ -164,8 +162,8 @@ Write-Step "1/9" "Checking disk space"
 $disk   = Get-PSDrive $INSTALL_DRIVE
 $freeGB = [math]::Round($disk.Free / 1GB, 1)
 Write-Info "Free space on ${INSTALL_DRIVE}: drive: ${freeGB} GB"
-if ($freeGB -lt 55) {
-    Write-Warn "Less than 55 GB free. You may run out of space."
+if ($freeGB -lt 40) {
+    Write-Warn "Less than 40 GB free. You may run out of space."
     $r = Read-Host "Continue anyway? [Y/n]"
     if ($r -eq "n" -or $r -eq "N") { exit }
 } else {
@@ -257,6 +255,31 @@ if (Test-CommandExists "git") {
         Write-Err "Git install failed. Install from git-scm.com"
         Read-Host "Press Enter to exit"; exit 1
     }
+}
+
+# -- Git LFS (Electron repo tracks large video assets via LFS) --
+if (Test-CommandExists "git-lfs") {
+    Write-OK "Git LFS already installed: $(git lfs version)"
+} else {
+    if (Test-CommandExists "winget") {
+        Write-Info "Installing Git LFS via winget ..."
+        winget install --id GitHub.GitLFS --silent --accept-package-agreements --accept-source-agreements
+        Refresh-Path
+    }
+    if (-not (Test-CommandExists "git-lfs")) {
+        $lfsInstaller = "$env:TEMP\git-lfs-installer.exe"
+        Download-File "https://github.com/git-lfs/git-lfs/releases/download/v3.7.1/git-lfs-windows-v3.7.1.exe" $lfsInstaller "Git LFS"
+        Start-Process $lfsInstaller -ArgumentList "/VERYSILENT /NORESTART" -Wait -NoNewWindow
+        Refresh-Path
+    }
+    if (Test-CommandExists "git-lfs") {
+        Write-OK "Git LFS installed: $(git lfs version)"
+    } else {
+        Write-Warn "Git LFS install failed. Large video files will show as pointer files -- install manually from git-lfs.com"
+    }
+}
+if (Test-CommandExists "git-lfs") {
+    git lfs install --skip-repo | Out-Null
 }
 
 # ================================================================
@@ -471,7 +494,7 @@ if ($SKIP_MODELS) {
 } else {
 
 Write-Step "8/9" "Downloading AI Models"
-Write-Host "       Total: ~31 GB -- may take 1-3 hours" -ForegroundColor Yellow
+Write-Host "       Total: ~18 GB -- may take 30-90 min" -ForegroundColor Yellow
 Write-Host ""
 
 # Try to get aria2 for fast parallel downloads
@@ -515,46 +538,56 @@ foreach ($model in $MODELS) {
     Write-Info "URL : $($model.URL)"
     Write-Info "To  : $($model.DEST)"
 
-    $success = $false
+    $success  = $false
+    $isHF     = $model.URL -like "https://huggingface.co/*"
 
     # Method 1 -- aria2 (fastest: 16 parallel connections)
     if ($aria2) {
         try {
             $destDir  = Split-Path $model.DEST
             $destFile = Split-Path $model.DEST -Leaf
-            & $aria2 $model.URL `
-                --dir="$destDir" `
-                --out="$destFile" `
-                --max-connection-per-server=16 `
-                --split=16 `
-                --min-split-size=10M `
-                --continue=true `
-                --console-log-level=warn `
-                --summary-interval=30
+            $aria2Args = @(
+                $model.URL,
+                "--dir=$destDir",
+                "--out=$destFile",
+                "--max-connection-per-server=16",
+                "--split=16",
+                "--min-split-size=10M",
+                "--continue=true",
+                "--console-log-level=warn",
+                "--summary-interval=30"
+            )
+            if ($isHF) { $aria2Args += "--header=Authorization: Bearer $HF_TOKEN" }
+            & $aria2 @aria2Args
             if ($LASTEXITCODE -eq 0) { $success = $true }
         } catch { }
     }
 
-    # Method 2 -- BITS transfer (resumes on disconnect)
+    # Method 2 -- Invoke-WebRequest with HF auth header (gated repos need the token)
+    if (-not $success) {
+        try {
+            Write-Info "Using Invoke-WebRequest ..."
+            if ($isHF) {
+                Invoke-WebRequest -Uri $model.URL -OutFile $model.DEST -UseBasicParsing -Headers @{ Authorization = "Bearer $HF_TOKEN" }
+            } else {
+                Invoke-WebRequest -Uri $model.URL -OutFile $model.DEST -UseBasicParsing
+            }
+            $success = $true
+        } catch {
+            Write-Warn "Invoke-WebRequest failed: $_"
+        }
+    }
+
+    # Method 3 -- BITS transfer (last resort -- cannot send auth headers, so gated HF repos will fail here)
     if (-not $success) {
         try {
             Write-Info "Using BITS transfer ..."
             Start-BitsTransfer -Source $model.URL -Destination $model.DEST -DisplayName $model.Name
             $success = $true
         } catch {
-            Write-Warn "BITS failed: $_"
-        }
-    }
-
-    # Method 3 -- Invoke-WebRequest (last resort)
-    if (-not $success) {
-        try {
-            Write-Info "Using Invoke-WebRequest ..."
-            Invoke-WebRequest -Uri $model.URL -OutFile $model.DEST -UseBasicParsing
-            $success = $true
-        } catch {
             Write-Err "All download methods failed for: $($model.Name)"
             Write-Warn "Download manually from: $($model.URL)"
+            if ($isHF) { Write-Warn "  (gated repo -- add header 'Authorization: Bearer $HF_TOKEN')" }
             Write-Warn "Save to               : $($model.DEST)"
         }
     }

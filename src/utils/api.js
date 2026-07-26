@@ -39,8 +39,9 @@ export async function createTemplate(templateData) {
   return apiRequest('POST', '/create-template', templateData);
 }
 
-export async function getTemplates() {
-  return apiRequest('GET', '/get-templates');
+export async function getTemplates(mode) {
+  const qs = mode ? `?mode=${encodeURIComponent(mode)}` : '';
+  return apiRequest('GET', `/get-templates${qs}`);
 }
 
 export async function getTemplateById(id) {
@@ -59,8 +60,9 @@ export async function createEvent(eventData) {
   return apiRequest('POST', '/create-event', eventData);
 }
 
-export async function getEvents() {
-  return apiRequest('GET', '/show-events');
+export async function getEvents(mode) {
+  const qs = mode ? `?mode=${encodeURIComponent(mode)}` : '';
+  return apiRequest('GET', `/show-events${qs}`);
 }
 
 export async function deleteEventApi(id) {
@@ -112,11 +114,11 @@ export async function generateImage(imageBase64, templateId, eventId, seed) {
   }
 }
 
-export async function previewImageApi(imageBase64, prompt, seed) {
+export async function previewImageApi(imageBase64, prompt, seed, mode) {
   const bridge = window?.catherine?.api;
   if (!bridge) return { ok: false, error: 'API bridge not available.' };
   try {
-    const res = await bridge.previewImage(imageBase64, prompt, seed ?? null);
+    const res = await bridge.previewImage(imageBase64, prompt, seed ?? null, mode || 'local');
     if (res.status < 200 || res.status >= 300) {
       return { ok: false, error: res.body?.detail || `HTTP ${res.status}` };
     }

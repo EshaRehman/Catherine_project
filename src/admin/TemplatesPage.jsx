@@ -12,12 +12,13 @@ export function TemplatesPage() {
   const {
     openTemplateEditor,
     createDefaultTemplate,
+    settings,
   } = useApp();
 
   const loadTemplates = async () => {
     setLoading(true);
     setError('');
-    const res = await getTemplates();
+    const res = await getTemplates(settings.aiMode);
     console.log('getTemplates response:', res);
     
     if (res.ok) {

@@ -265,7 +265,7 @@ ipcMain.handle('api-generate', async (_event, { url, imageBase64, templateId, ev
 
 /* ---- Multipart POST for /preview-image ---- */
 
-ipcMain.handle('api-preview-image', async (_event, { imageBase64, prompt, seed }) => {
+ipcMain.handle('api-preview-image', async (_event, { imageBase64, prompt, seed, mode }) => {
   return new Promise((resolve, reject) => {
     const mimeMatch = imageBase64.match(/^data:(image\/[\w+.-]+);base64,/);
     const mime = mimeMatch ? mimeMatch[1] : 'image/jpeg';
@@ -301,8 +301,15 @@ ipcMain.handle('api-preview-image', async (_event, { imageBase64, prompt, seed }
       );
     }
 
+    const modePart = Buffer.from(
+      `--${boundary}${CRLF}` +
+      `Content-Disposition: form-data; name="mode"${CRLF}${CRLF}` +
+      `${mode || 'local'}${CRLF}`,
+      'utf8'
+    );
+
     const closingBoundary = Buffer.from(`--${boundary}--${CRLF}`, 'utf8');
-    const bodyBuffer = Buffer.concat([imagePartHeader, imageBuffer, imagePartFooter, promptPart, seedPart, closingBoundary]);
+    const bodyBuffer = Buffer.concat([imagePartHeader, imageBuffer, imagePartFooter, promptPart, seedPart, modePart, closingBoundary]);
 
     const options = {
       hostname: '127.0.0.1',

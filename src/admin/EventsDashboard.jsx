@@ -32,8 +32,8 @@ export function EventsDashboard() {
   const loadEventsAndTemplates = async () => {
     setLoadingEvents(true);
     const [resEvents, resTemplates] = await Promise.all([
-      getEvents(),
-      getTemplates()
+      getEvents(settings.aiMode),
+      getTemplates(settings.aiMode)
     ]);
 
     if (resTemplates.ok) {

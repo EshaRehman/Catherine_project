@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "Read(//d/APP-Electron/Backend\\\\\\(Fast-API\\\\\\)/routes/**)"
+    ],
+    "additionalDirectories": [
+      "D:\\APP-Electron\\Backend(Fast-API)"
+    ]
+  }
+}

@@ -250,6 +250,7 @@ export function TemplateEditor() {
     editorIsNew,
     setAdminRoute,
     createDefaultTemplate,
+    settings,
   } = useApp();
 
   const [draft, setDraft] = useState(() => createDefaultTemplate());
@@ -285,6 +286,7 @@ export function TemplateEditor() {
   const expressionsRef = useRef(expressions);
   const sizesRef = useRef(sizes);
   const placementsRef = useRef(placements);
+  const aiModeRef = useRef(settings.aiMode);
 
   const updatePeoplePrompt = (count, value) => {
     setPeoplePrompts((prev) => ({ ...prev, [count]: value }));
@@ -380,6 +382,7 @@ export function TemplateEditor() {
   useEffect(() => { expressionsRef.current = expressions; }, [expressions]);
   useEffect(() => { sizesRef.current = sizes; }, [sizes]);
   useEffect(() => { placementsRef.current = placements; }, [placements]);
+  useEffect(() => { aiModeRef.current = settings.aiMode; }, [settings.aiMode]);
 
   // Live idle preview: re-render whenever draft settings change
   useEffect(() => {
@@ -461,7 +464,7 @@ export function TemplateEditor() {
     setRawResultDataUrl(null);
     setResultDataUrl(null);
 
-    previewImageApi(dataUrl, combined, undefined).then(async res => {
+    previewImageApi(dataUrl, combined, undefined, aiModeRef.current).then(async res => {
       if (res.ok && res.data?.output_image_base64) {
         const rawUrl = `data:image/jpeg;base64,${res.data.output_image_base64}`;
         // Store raw AI output — overlay is rendered live as HTML so it stays fully editable
@@ -570,6 +573,7 @@ export function TemplateEditor() {
     // Build the API payload
     const payload = {
       name: draft.name || 'Untitled',
+      mode: settings.aiMode,
       basePrompt: '',
       peoplePrompts: {
         1: peoplePrompts[1] || '',

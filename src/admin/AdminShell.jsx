@@ -62,6 +62,25 @@ export function AdminShell({ children }) {
           </div>
           <span className="admin-brand-text">{settings.brandName || 'Catherine'}</span>
         </div>
+        <div
+          className="admin-mode-badge"
+          title="Templates and events created now belong to this AI mode. Re-enter admin to switch."
+          style={{
+            margin: '0 0 14px',
+            padding: '5px 10px',
+            fontSize: 11,
+            fontWeight: 600,
+            letterSpacing: '0.02em',
+            textTransform: 'uppercase',
+            borderRadius: 6,
+            width: 'fit-content',
+            color: settings.aiMode === 'paid' ? '#facc15' : '#4ade80',
+            background: settings.aiMode === 'paid' ? 'rgba(250,204,21,0.12)' : 'rgba(74,222,128,0.12)',
+            border: `1px solid ${settings.aiMode === 'paid' ? 'rgba(250,204,21,0.35)' : 'rgba(74,222,128,0.35)'}`,
+          }}
+        >
+          {settings.aiMode === 'paid' ? 'Paid API mode' : 'Local AI mode'}
+        </div>
         <nav className="admin-nav admin-nav--vertical" aria-label="Admin sections">
           <button
             type="button"

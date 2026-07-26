@@ -39,6 +39,7 @@ export function AppProvider({ children }) {
     activeEventId: null,
     loraModulePath: '',
     themePackNotes: '',
+    aiMode: 'local', // 'local' | 'paid' — which AI engine the whole app is currently scoped to
   });
 
   useEffect(() => {

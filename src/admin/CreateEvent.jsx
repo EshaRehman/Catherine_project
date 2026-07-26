@@ -26,6 +26,7 @@ export function CreateEvent() {
   const {
     setAdminRoute,
     eventFormId,
+    settings,
   } = useApp();
 
   const [name, setName] = useState('');
@@ -42,8 +43,8 @@ export function CreateEvent() {
     const fetchData = async () => {
       setLoadingTemplates(true);
       const [resTemplates, resEvents] = await Promise.all([
-        getTemplates(),
-        getEvents()
+        getTemplates(settings.aiMode),
+        getEvents(settings.aiMode)
       ]);
       
       if (resTemplates.ok) {
@@ -116,7 +117,8 @@ export function CreateEvent() {
           templateId: id,
           name: t ? t.name : 'Unknown Template'
         };
-      })
+      }),
+      mode: settings.aiMode,
     };
 
     // Right now there isn't an edit event API mentioned, so we will use createEvent 
