@@ -1,7 +1,45 @@
 {
   "permissions": {
     "allow": [
-      "Bash(sed *)"
+      "Bash(sed *)",
+      "Bash(python -c ' *)",
+      "Bash(mkdir -p src/assets/fonts)",
+      "Bash(curl -s -o src/assets/fonts/Montserrat-700.woff2 \"https://fonts.gstatic.com/s/montserrat/v31/JTUHjIg1_i6t8kCHKm4532VJOt5-QNFgpCuM73w5aXo.woff2\")",
+      "Bash(curl -s -o src/assets/fonts/Montserrat-800.woff2 \"https://fonts.gstatic.com/s/montserrat/v31/JTUHjIg1_i6t8kCHKm4532VJOt5-QNFgpCvr73w5aXo.woff2\")",
+      "Bash(curl -s -o src/assets/fonts/Montserrat-900.woff2 \"https://fonts.gstatic.com/s/montserrat/v31/JTUHjIg1_i6t8kCHKm4532VJOt5-QNFgpCvC73w5aXo.woff2\")",
+      "Bash(curl -s -o src/assets/fonts/Raleway-300.woff2 \"https://fonts.gstatic.com/s/raleway/v37/1Ptxg8zYS_SKggPN4iEgvnHyvveLxVuEorCIPrE.woff2\")",
+      "Bash(python)",
+      "Bash(sleep 3; tail -20 /tmp/npmstart.log | grep -iE \"error|fail|invalid|Module not found\")",
+      "Read(//tmp/**)",
+      "Bash(sleep 3; tail -15 /tmp/npmstart.log | grep -iE \"error|fail|invalid|Module not found\")",
+      "Bash(python -c \"import cairosvg; print\\('cairosvg OK'\\)\")",
+      "Bash(python -m pip install cairosvg --quiet)",
+      "Bash(python -c \"import cairosvg; print\\('cairosvg now OK'\\)\")",
+      "Bash(node -e \"try{require.resolve\\('@resvg/resvg-js'\\);console.log\\('resvg-js present'\\)}catch\\(e\\){console.log\\('no resvg-js'\\)}\")",
+      "Bash(node -e \"try{require.resolve\\('sharp'\\);console.log\\('sharp present'\\)}catch\\(e\\){console.log\\('no sharp'\\)}\")",
+      "Bash(node -e \"try{require.resolve\\('puppeteer'\\);console.log\\('puppeteer present'\\)}catch\\(e\\){console.log\\('no puppeteer'\\)}\")",
+      "Bash(python -m pip install cairosvg)",
+      "Read(//c/Users/gng/AppData/Local/Temp/claude/d--Catherine-project/96cbe83f-aafa-4e2b-b9af-8d26d069dccd/scratchpad/**)",
+      "Bash(node render.js test.svg test.png)",
+      "Bash(tail -n 60 /tmp/npmstart.log 2>/dev/null || echo \"no log file\")",
+      "Bash(node -e \"const c=require\\('fs'\\).readFileSync\\('src/index.css','utf8'\\);let d=0;for\\(const ch of c\\){if\\(ch==='{'\\)d++;if\\(ch==='}'\\)d--;}console.log\\('brace depth:',d\\);\")",
+      "Bash(npx webpack *)",
+      "Bash(netstat -ano)",
+      "Bash(powershell -Command 'Stop-Process -Id 21428 -Force; Get-Process node -ErrorAction SilentlyContinue | Where-Object { $_.Id -eq 21428 } | Measure-Object | Select-Object -ExpandProperty Count')",
+      "Bash(grep -iE \"ERROR in|Failed to compile|Module build failed|SyntaxError|Module not found\" /tmp/qrbuild2.log | head -10 || echo \"NO renderer compile errors found\")",
+      "Bash(node -e \"const c=require\\('fs'\\).readFileSync\\('src/index.css','utf8'\\);let d=0;for\\(const ch of c\\){if\\(ch==='{'\\)d++;if\\(ch==='}'\\)d--;}console.log\\('css brace depth:',d\\);\")",
+      "Bash(node -e \"['src/kiosk/QRScreen.jsx','src/kiosk/ResultScreen.jsx','src/kiosk/CameraScreen.jsx'].forEach\\(f=>{const t=require\\('fs'\\).readFileSync\\(f,'utf8'\\);const o=\\(t.match\\(/\\\\\\(/g\\)||[]\\).length,cl=\\(t.match\\(/\\\\\\)/g\\)||[]\\).length;console.log\\(f, 'parens', o, cl, o===cl?'ok':'MISMATCH'\\);}\\);\")",
+      "Bash(node -e \"const c=require\\('fs'\\).readFileSync\\('src/index.css','utf8'\\);let d=0;for\\(const ch of c\\){if\\(ch==='{'\\)d++;if\\(ch==='}'\\)d--;}console.log\\('depth:',d\\);\")",
+      "Bash(node -e \"['src/kiosk/CameraScreen.jsx','src/kiosk/QRScreen.jsx','src/kiosk/ResultScreen.jsx'].forEach\\(f=>{const t=require\\('fs'\\).readFileSync\\(f,'utf8'\\);const o=\\(t.match\\(/\\\\\\(/g\\)||[]\\).length,cl=\\(t.match\\(/\\\\\\)/g\\)||[]\\).length,b=\\(t.match\\(/\\\\{/g\\)||[]\\).length,cb=\\(t.match\\(/\\\\}/g\\)||[]\\).length;console.log\\(f,'\\(\\)',o,cl,'{}',b,cb, \\(o===cl&&b===cb\\)?'ok':'MISMATCH'\\);}\\);\")",
+      "PowerShell($s=New-Object -ComObject Shell.Application; $dir=\\(Get-Item 'IMG_0566.MP4'\\).DirectoryName; $f=$s.Namespace\\($dir\\); $i=$f.ParseName\\('IMG_0566.MP4'\\); Write-Output \\(\"Dimensions: \" + $f.GetDetailsOf\\($i,314\\)\\); Write-Output \\(\"FrameWidth: \" + $f.GetDetailsOf\\($i,316\\)\\); Write-Output \\(\"FrameHeight: \" + $f.GetDetailsOf\\($i,317\\)\\); Write-Output \\(\"Orientation: \" + $f.GetDetailsOf\\($i,318\\)\\))",
+      "Bash(node -e ' *)",
+      "Bash(grep -nA3 \"kiosk-idle--video .kiosk-idle__footer {\" src/index.css)",
+      "Bash(grep -nA3 \"^.result-actions {\" src/index.css)",
+      "Bash(grep -nA6 \".camera-screen .camera-wrap__controls {\" src/index.css)",
+      "Bash(ffprobe -v error -select_streams v:0 -show_entries stream=width,height -of csv=p=0 IMG_0566.MP4)",
+      "PowerShell($s = New-Object -ComObject Shell.Application; $f = $s.Namespace\\(\\(Get-Item \"D:\\\\Catherine_project\\\\IMG_0566.MP4\"\\).DirectoryName\\); $i = $f.ParseName\\(\"IMG_0566.MP4\"\\); $f.GetDetailsOf\\($i, 314\\); $f.GetDetailsOf\\($i, 316\\); \"Dimensions: \" + $f.GetDetailsOf\\($i, 27\\))",
+      "PowerShell($s = New-Object -ComObject Shell.Application; $f = $s.Namespace\\(\\(Get-Item \"D:\\\\Catherine_project\\\\IMG_0566.MP4\"\\).DirectoryName\\); $i = $f.ParseName\\(\"IMG_0566.MP4\"\\); \"Width: \" + $f.GetDetailsOf\\($i, 316\\); \"Height: \" + $f.GetDetailsOf\\($i, 314\\))",
+      "PowerShell($s = New-Object -ComObject Shell.Application; $item = Get-Item \"D:\\\\Catherine_project\\\\IMG_0566.MP4\"; $f = $s.Namespace\\($item.DirectoryName\\); $i = $f.ParseName\\($item.Name\\); for \\($n=0; $n -lt 320; $n++\\) { $val = $f.GetDetailsOf\\($i, $n\\); if \\($val -match '\\\\d+ x \\\\d+' -or $f.GetDetailsOf\\($null,$n\\) -match 'dimension|width|height|resolution|Frame'\\) { \"$n : \" + $f.GetDetailsOf\\($null,$n\\) + \" = \" + $val } })"
     ]
   }
 }

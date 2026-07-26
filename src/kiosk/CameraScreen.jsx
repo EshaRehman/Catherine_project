@@ -196,28 +196,40 @@ export function CameraScreen({ onCapture, onBack }) {
                   </span>
                 </div>
               ) : null}
-              <div className="camera-wrap__controls">
-                <button
-                  type="button"
-                  className={`camera-shutter${count > 0 ? ' camera-shutter--counting' : ''}`}
-                  onClick={startCountdown}
-                  disabled={count > 0 || !streamReady}
-                  aria-label={
-                    count > 0
-                      ? 'Countdown in progress'
-                      : streamReady
-                        ? 'Capture photo'
-                        : 'Camera starting'
-                  }
-                >
-                  <span className="camera-shutter__ring" aria-hidden />
-                  <span className="camera-shutter__disc" aria-hidden />
-                </button>
-                <p className="camera-shutter__status" aria-live="polite">
-                  {count > 0 ? 'Hold still…' : !streamReady ? 'Starting camera…' : ''}
-                </p>
-              </div>
             </div>
+          </div>
+          <div className="camera-wrap__controls">
+            <button
+              type="button"
+              className={`camera-capture-btn${count > 0 ? ' camera-capture-btn--counting' : ''}`}
+              onClick={startCountdown}
+              disabled={count > 0 || !streamReady}
+              aria-label={
+                count > 0
+                  ? 'Countdown in progress'
+                  : streamReady
+                    ? 'Capture photo'
+                    : 'Camera starting'
+              }
+            >
+              <span className="camera-capture-btn__glow" aria-hidden />
+              <span className="camera-capture-btn__inner">
+                <svg className="camera-capture-btn__icon" viewBox="0 0 24 24" fill="none" aria-hidden>
+                  <path
+                    d="M9 4l1.2-2h3.6L15 4"
+                    stroke="currentColor"
+                    strokeWidth="1.8"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                  <rect x="3" y="4" width="18" height="14" rx="3" stroke="currentColor" strokeWidth="1.8" />
+                  <circle cx="12" cy="11.5" r="3.6" stroke="currentColor" strokeWidth="1.8" />
+                </svg>
+                <span className="camera-capture-btn__label">
+                  {count > 0 ? 'Hold still' : !streamReady ? 'Starting' : 'Capture'}
+                </span>
+              </span>
+            </button>
           </div>
         </div>
       </div>

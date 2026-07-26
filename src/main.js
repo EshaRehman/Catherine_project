@@ -890,10 +890,11 @@ document.addEventListener('keydown', e => {
 
 const createWindow = () => {
   const mainWindow = new BrowserWindow({
-    width: 1440,
-    height: 900,
-    minWidth: 960,
-    minHeight: 640,
+    width: 685,
+    height: 1214,
+    useContentSize: true,
+    minWidth: 480,
+    minHeight: Math.round((480 * 1214) / 685),
     show: false,
     backgroundColor: '#F5F2ED',
     titleBarStyle: process.platform === 'darwin' ? 'hiddenInset' : 'default',
@@ -904,9 +905,14 @@ const createWindow = () => {
     },
   });
 
+  // Locks resizing to the kiosk's 685x1214 portrait ratio — without this the
+  // window can be dragged into an off-ratio shape, which shifts object-fit:
+  // cover's crop axis on the idle video from side-cropping (by design) to
+  // top/bottom-cropping, cutting into the mascot at the bottom of frame.
+  mainWindow.setAspectRatio(685 / 1214);
+
   mainWindow.loadURL(MAIN_WINDOW_WEBPACK_ENTRY);
   mainWindow.once('ready-to-show', () => {
-    mainWindow.maximize();
     mainWindow.show();
   });
 };

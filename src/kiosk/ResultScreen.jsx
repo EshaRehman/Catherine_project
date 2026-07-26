@@ -14,6 +14,24 @@ export function ResultScreen({ imageDataUrl, template, onQR, onRegenerate }) {
         </span>
       </header>
       <div className="result-screen__main">
+        <div className="result-actions result-actions--split">
+          <button
+            type="button"
+            className="result-choice result-choice--regen"
+            onClick={onRegenerate}
+          >
+            <span className="result-choice__emoji" aria-hidden>🙁</span>
+            <span className="result-choice__label">Try again</span>
+          </button>
+          <button
+            type="button"
+            className="result-choice result-choice--proceed"
+            onClick={onQR}
+          >
+            <span className="result-choice__emoji" aria-hidden>😊</span>
+            <span className="result-choice__label">Save photo</span>
+          </button>
+        </div>
         <div className="result-screen__viewport kiosk-flow-viewport">
           <div className="kiosk-portrait-frame kiosk-flow-frame kiosk-portrait-frame--result">
             {url ? (
@@ -22,32 +40,7 @@ export function ResultScreen({ imageDataUrl, template, onQR, onRegenerate }) {
               <div className={`kiosk-portrait-frame__media kiosk-portrait-frame__plate ${pc}`} />
             )}
             <div className="kiosk-portrait-frame__result-shade" aria-hidden />
-            <button
-              type="button"
-              className="result-regen"
-              onClick={onRegenerate}
-              aria-label="Regenerate"
-              title="Regenerate"
-            >
-              <svg
-                className="result-regen__icon"
-                viewBox="0 0 24 24"
-                aria-hidden
-                focusable="false"
-              >
-                <path
-                  fill="currentColor"
-                  d="M17.65 6.35A7.96 7.96 0 0 0 12 4a8 8 0 1 0 7.73 10h-2.08A6 6 0 1 1 12 6c1.66 0 3.14.69 4.22 1.78L13 11h7V4z"
-                />
-              </svg>
-            </button>
           </div>
-        </div>
-        <div className="result-actions">
-          <button type="button" className="kiosk-tap kiosk-tap--qr" onClick={onQR}>
-            <span className="kiosk-tap__shine" aria-hidden />
-            QR code
-          </button>
         </div>
       </div>
     </div>

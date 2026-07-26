@@ -1,5 +1,6 @@
 import React, { useRef, useEffect } from 'react';
 import idleHeroVideo from './idleHeroMedia.js';
+import logo from '../assets/logo.png';
 
 export function IdleScreen({ onStart, disabled }) {
   const videoRef = useRef(null);
@@ -24,14 +25,15 @@ export function IdleScreen({ onStart, disabled }) {
         playsInline
         aria-hidden
       />
-      <div className="kiosk-idle__footer">
+      <div className="kiosk-idle__top">
+        <img className="kiosk-idle__logo" src={logo} alt="AI Photo Booth Co" />
         {disabled ? (
           <p className="kiosk-idle__hint">
             In admin, add templates to an event and set that event as active — then return with{' '}
             <strong>Live experience</strong>.
           </p>
         ) : null}
-        <button type="button" className="kiosk-tap kiosk-tap--idle-bottom" onClick={onStart} disabled={disabled}>
+        <button type="button" className="kiosk-tap kiosk-tap--idle-top" onClick={onStart} disabled={disabled}>
           <span className="kiosk-tap__shine" aria-hidden />
           Tap to start
         </button>

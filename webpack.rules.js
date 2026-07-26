@@ -36,4 +36,8 @@ module.exports = [
     test: /\.(mp4|m4v|webm|mov)$/i,
     type: 'asset/resource',
   },
+  {
+    test: /\.(woff2?|ttf|otf)$/i,
+    type: 'asset/resource',
+  },
 ];
