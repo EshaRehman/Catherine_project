@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, dialog, shell } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, shell, screen } = require('electron');
 const fs = require('node:fs');
 const fsp = require('node:fs/promises');
 const path = require('node:path');
@@ -571,6 +571,37 @@ ipcMain.handle('job-email-zip', async (event, payload = {}) => {
   return { ok: true, path: result.filePath, count: built.count, mailtoOpened: true };
 });
 
+/* ---- Window shape ----
+   ONE window shape for the whole app: the 685x1214 portrait kiosk ratio.
+   Admin does NOT get its own landscape window — the admin panel is expected to
+   lay itself out inside the same portrait viewport the operator already sees in
+   user mode (see the admin responsive rules at the end of index.css). */
+
+const KIOSK_SHAPE = { width: 685, height: 1214 };
+const KIOSK_RATIO = KIOSK_SHAPE.width / KIOSK_SHAPE.height;
+
+/* 1214px of content height does not fit on a 1080p screen (work area ~1032px).
+   Asking for it anyway gets the height clamped but NOT the width, which leaves
+   the window off-ratio — the exact state setAspectRatio exists to prevent. So
+   scale the whole box down until it fits, keeping the ratio exact. */
+const fitKioskShape = (win) => {
+  const { workAreaSize } = screen.getDisplayMatching(win.getBounds());
+  // Leave room for the window frame + title bar; getContentSize is inner size.
+  const [outerW, outerH] = win.getSize();
+  const [innerW, innerH] = win.getContentSize();
+  const chromeW = Math.max(0, outerW - innerW);
+  const chromeH = Math.max(0, outerH - innerH);
+
+  const maxW = workAreaSize.width - chromeW;
+  const maxH = workAreaSize.height - chromeH;
+
+  const scale = Math.min(1, maxW / KIOSK_SHAPE.width, maxH / KIOSK_SHAPE.height);
+  return {
+    width: Math.max(1, Math.round(KIOSK_SHAPE.width * scale)),
+    height: Math.max(1, Math.round(KIOSK_SHAPE.height * scale)),
+  };
+};
+
 /* ---- Gallery window ---- */
 
 ipcMain.handle('open-gallery', async (_event, { eventId, eventName = 'Gallery' } = {}) => {
@@ -916,7 +947,15 @@ const createWindow = () => {
   // window can be dragged into an off-ratio shape, which shifts object-fit:
   // cover's crop axis on the idle video from side-cropping (by design) to
   // top/bottom-cropping, cutting into the mascot at the bottom of frame.
-  mainWindow.setAspectRatio(685 / 1214);
+  //
+  // 1214px of content height exceeds a 1080p work area, so the requested size
+  // above gets its height clamped and its width left alone — landing off-ratio
+  // before the user has touched anything. Shrink to the largest box that both
+  // fits and holds the ratio, then lock.
+  const fitted = fitKioskShape(mainWindow);
+  mainWindow.setContentSize(fitted.width, fitted.height, false);
+  mainWindow.setAspectRatio(KIOSK_RATIO);
+  mainWindow.center();
 
   mainWindow.loadURL(MAIN_WINDOW_WEBPACK_ENTRY);
   mainWindow.once('ready-to-show', () => {

@@ -102,6 +102,11 @@
      gap (the larger of the two requirements), which also gives the camera
      screen's straddling button a bit more breathing room above it. */
   --flow-frame-reserve: clamp(92px, 13vh, 140px);
+
+  /* Horizontal breathing room in the admin shell. Fixed 40px gutters cost 80px
+     of a narrow window — enough on their own to push the event cards past the
+     right edge — so this scales with the viewport. */
+  --admin-gutter: clamp(14px, 3.2vw, 40px);
 }
 
 *,
@@ -186,6 +191,7 @@ select {
 .admin-sidebar {
   width: 252px;
   flex-shrink: 0;
+  min-width: 0;
   display: flex;
   flex-direction: column;
   gap: 22px;
@@ -423,7 +429,7 @@ select {
   justify-content: flex-end;
   align-items: center;
   gap: 10px;
-  padding: 16px 40px;
+  padding: 16px var(--admin-gutter);
   border-bottom: 1px solid rgba(255, 255, 255, 0.07);
   background: rgba(13, 11, 26, 0.55);
   backdrop-filter: blur(10px);
@@ -431,11 +437,14 @@ select {
 
 .admin-main {
   flex: 1;
+  min-width: 0;
   min-height: 0;
   overflow-y: auto;
-  overflow-x: hidden;
+  /* auto, not hidden: if anything ever does exceed the width it must stay
+     reachable by scrolling rather than being silently clipped. */
+  overflow-x: auto;
   /* Match sidebar top padding so brand + page headings align */
-  padding: 28px 40px 36px;
+  padding: 28px var(--admin-gutter) 36px;
   width: 100%;
 }
 
@@ -546,6 +555,47 @@ select {
   background: rgba(255, 255, 255, 0.1);
 }
 
+/* AI mode picker: the active mode is marked with an outline rather than a
+   filled gradient, so the two options stay visually equal and the choice reads
+   as a selection instead of a call to action. */
+.mode-option {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 13px 18px;
+}
+
+.mode-option--current {
+  /* The ring below replaces the border; keep the box the same size so the
+     button doesn't shift when selection moves between the two options. */
+  border-color: transparent;
+  color: #fff;
+}
+
+/* Gradient ring drawn as a masked pseudo-element rather than a border, since
+   border-color takes a single colour. Same amber -> pink -> violet -> blue
+   gradient as .btn-primary and the brand mark. The two masks are XOR'd so only
+   the 2px padding band paints, leaving the button's own background untouched. */
+.mode-option--current::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding: 2px;
+  background: linear-gradient(100deg, #FFB800 0%, #FF3D6E 32%, #7B2CFF 62%, #00E6FF 100%);
+  -webkit-mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  mask-composite: exclude;
+  pointer-events: none;
+}
+
 .btn-danger {
   background: rgba(229, 72, 77, 0.14);
   color: var(--danger);
@@ -560,17 +610,21 @@ select {
   font-size: 0.82rem;
 }
 
-/* --- Cards grid --- */
+/* --- Cards grid ---
+   The min() on every track floor is load-bearing: a bare minmax(340px, 1fr)
+   keeps demanding 340px inside a container narrower than that, and the card
+   then overflows .admin-main and gets clipped, putting its buttons out of
+   reach. min(340px, 100%) lets the track collapse to the available width. */
 .card-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(260px, 300px));
+  grid-template-columns: repeat(auto-fit, minmax(min(260px, 100%), 300px));
   gap: 24px;
   justify-content: center;
   width: 100%;
 }
 
 .card-grid--events {
-  grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(min(340px, 100%), 1fr));
   justify-content: start;
 }
 
@@ -2273,26 +2327,38 @@ select {
   margin: 0 auto;
 }
 
-/* Kiosk picker only: single row, up to four cards */
+/* Kiosk picker: three per row, wrapping onto further rows as templates are
+   added. A single nowrap row made every extra template narrower than the last,
+   which is what squeezed the titles into three-line stacks.
+   Flex-wrap rather than grid on purpose: grid flows a partial last row hard
+   left, so 4 templates left one card stranded in the corner. Flex centres each
+   line independently, so 4 gives 3 + 1 centred and 5 gives 3 + 2 centred. */
 .kiosk-templates-grid--themes.kiosk-templates-grid--themes-row {
+  --tpl-gap: clamp(12px, 1.6vw, 26px);
   display: flex;
-  flex-wrap: nowrap;
+  flex-wrap: wrap;
   justify-content: center;
   align-items: stretch;
-  gap: clamp(12px, 1.6vw, 26px);
+  gap: var(--tpl-gap);
   max-width: min(1720px, 100%);
 }
 
+/* Fixed basis, not flex-grow: the cards must stay the same size whether the
+   row holds one or three, otherwise the lone card on the last row would
+   stretch to full width. */
 .kiosk-templates-grid--themes-row .kiosk-tpl-card {
-  flex: 1 1 0;
+  flex: 0 0 calc((100% - 2 * var(--tpl-gap)) / 3);
   min-width: 0;
   max-width: 460px;
 }
 
+/* Scales with the viewport so the name stays on one or two lines in the narrow
+   kiosk window instead of stacking word-per-line. */
 .kiosk-templates-grid--themes-row .kiosk-tpl-title {
-  font-size: 1.36rem;
+  font-size: clamp(0.8rem, 2.5vw, 1.15rem);
   font-family: 'Raleway', sans-serif;
   color: #F5F5F7;
+  line-height: 1.2;
 }
 
 .kiosk-templates-grid--inline {
@@ -2409,7 +2475,12 @@ select {
   justify-content: center;
   pointer-events: none;
   opacity: 0;
-  transition: opacity 0.38s ease;
+  /* visibility, not just opacity: an opacity:0 element still receives clicks,
+     so without this the invisible Select pill swallows the first tap in the
+     middle of the card while taps elsewhere only reveal it — the same gesture
+     doing two different things depending on where it lands. */
+  visibility: hidden;
+  transition: opacity 0.38s ease, visibility 0s linear 0.38s;
   background:
     linear-gradient(165deg, rgba(123, 44, 255, 0.1) 0%, transparent 42%),
     linear-gradient(0deg, rgba(18, 10, 36, 0.5) 0%, rgba(30, 18, 52, 0.28) 45%, transparent 72%);
@@ -2420,6 +2491,22 @@ select {
 .kiosk-tpl-card--hover-select:focus-within .kiosk-tpl-card__select-layer,
 .kiosk-tpl-card--hover-select.is-selected .kiosk-tpl-card__select-layer {
   opacity: 1;
+  visibility: visible;
+  transition: opacity 0.38s ease, visibility 0s;
+}
+
+/* Touchscreens have no hover, so the reveal-then-confirm dance costs a tap
+   that never pays for itself: the pill can never be "hovered" into view. Show
+   it up front so one tap on Select is one tap.
+   Both conditions on purpose: a Windows kiosk with a touchscreen AND a mouse
+   plugged in still reports hover:hover, so (pointer: coarse) is what actually
+   catches it. */
+@media (hover: none), (pointer: coarse) {
+  .kiosk-tpl-card--hover-select .kiosk-tpl-card__select-layer {
+    opacity: 1;
+    visibility: visible;
+    transition: none;
+  }
 }
 
 .kiosk-tpl-card__select-label {
@@ -3080,9 +3167,82 @@ select {
   box-shadow: 0 24px 70px rgba(0, 0, 0, 0.5);
 }
 
+/* cover, not contain: the loop is pre-rendered at the frame's own 1080x1320
+   ratio (its black top/bottom margins are cropped out at build time), so cover
+   fills the frame edge to edge with nothing clipped. contain would letterbox
+   it to 69% of the width and strand black down both sides. */
 .kiosk-portrait-frame--processing .kiosk-portrait-frame__media {
-  object-fit: contain;
+  object-fit: cover;
   background: #000;
+}
+
+/* --- Processing -> result cross-dissolve ---
+   The finished picture is mounted over the still-looping animation and faded
+   up, rather than the screen cutting to it. The image also settles from a
+   slight overscale, so it reads as the portrait resolving into focus instead
+   of a hard swap. The loop underneath pulls back and blurs at the same time,
+   which keeps the robot from competing with the face during the handover. */
+.kiosk-portrait-frame__reveal {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+  object-fit: cover;
+  opacity: 0;
+  transform: scale(1.06);
+  will-change: opacity, transform;
+  transition:
+    opacity 900ms cubic-bezier(0.22, 0.61, 0.36, 1),
+    transform 1400ms cubic-bezier(0.22, 0.61, 0.36, 1);
+}
+
+.kiosk-portrait-frame__reveal.is-in {
+  opacity: 1;
+  transform: scale(1);
+}
+
+.kiosk-portrait-frame__loop {
+  transition:
+    opacity 700ms ease,
+    transform 1400ms cubic-bezier(0.22, 0.61, 0.36, 1),
+    filter 700ms ease;
+}
+
+.kiosk-portrait-frame--processing.is-revealing .kiosk-portrait-frame__loop {
+  opacity: 0;
+  transform: scale(0.97);
+  filter: blur(10px);
+}
+
+/* The frame's purple edge brightens once as the picture lands. */
+.kiosk-portrait-frame--processing {
+  transition: border-color 900ms ease, box-shadow 900ms ease;
+}
+
+.kiosk-portrait-frame--processing.is-revealing {
+  border-color: #00E6FF;
+  box-shadow:
+    0 24px 70px rgba(0, 0, 0, 0.5),
+    0 0 42px rgba(0, 230, 255, 0.28);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .kiosk-portrait-frame__reveal,
+  .kiosk-portrait-frame__loop,
+  .kiosk-portrait-frame--processing {
+    transition-duration: 220ms;
+  }
+
+  .kiosk-portrait-frame__reveal,
+  .kiosk-portrait-frame__reveal.is-in {
+    transform: none;
+  }
+
+  .kiosk-portrait-frame--processing.is-revealing .kiosk-portrait-frame__loop {
+    transform: none;
+    filter: none;
+  }
 }
 
 .kiosk-portrait-frame--captured {
@@ -3696,6 +3856,24 @@ select {
   gap: clamp(14px, 3vw, 30px);
 }
 
+/* ProcessingScreen hands over with the picture already faded in, so the frame
+   itself doesn't move. These buttons are the only new thing on screen — easing
+   them up keeps the handover continuous instead of snapping into place. */
+@keyframes result-actions-in {
+  from { opacity: 0; transform: translateY(10px); }
+  to   { opacity: 1; transform: none; }
+}
+
+.result-actions--split {
+  animation: result-actions-in 520ms cubic-bezier(0.22, 0.61, 0.36, 1) both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .result-actions--split {
+    animation-duration: 1ms;
+  }
+}
+
 .result-choice {
   display: inline-flex;
   align-items: center;
@@ -4291,4 +4469,177 @@ select {
   font-weight: 700;
   color: var(--ink);
   margin: 0;
+}
+
+/* =====================================================================
+   Admin shell responsive rules.
+   These live at the end of the file on purpose: they share specificity
+   with the base admin rules above, so source order is what decides the
+   cascade. Moved earlier, they silently lose.
+   ===================================================================== */
+
+
+@media (max-width: 1040px) {
+  .admin-sidebar {
+    width: 196px;
+    gap: 16px;
+    padding: 24px 16px 20px;
+  }
+
+  .admin-brand-text {
+    font-size: 1.35rem;
+  }
+}
+
+@media (max-width: 820px) {
+  .shell-admin--split {
+    flex-direction: column;
+    /* Bound the height so .admin-main still has something to scroll inside;
+       .shell-admin only sets min-height, which lets children grow forever. */
+    height: 100vh;
+    height: 100dvh;
+  }
+
+  .admin-sidebar {
+    width: 100%;
+    flex-direction: row;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 10px 14px;
+    padding: 10px var(--admin-gutter);
+    border-right: none;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  }
+
+  .admin-brand {
+    flex-direction: row;
+    align-items: center;
+    gap: 10px;
+    width: auto;
+    padding-left: 0;
+    margin-right: auto;
+  }
+
+  /* Two tidy rows instead of one cramped wrapping line:
+       row A   [logo] .................. [Settings] [MODE badge]
+       row B   [Events] [Templates]
+     Explicit `order` rather than relying on natural wrapping: the items are
+     different widths in each mode ("Local AI" vs "Paid API"), and letting the
+     browser choose the break point moves controls between rows depending on
+     the label. flex-basis:100% on the nav guarantees it owns row B. */
+  .admin-sidebar__bottom {
+    order: 1;
+    margin-left: auto;
+  }
+
+  .admin-mode-badge {
+    order: 2;
+  }
+
+  .admin-nav--vertical {
+    order: 3;
+    flex-basis: 100%;
+  }
+
+  /* The logo is a wide lockup, not a square icon. Forcing it into a square box
+     and letting object-fit letterbox it renders it tiny with dead space either
+     side; fixing the height and freeing the width shows it at full size. */
+  .admin-brand-mark--photo {
+    width: auto;
+    height: 38px;
+  }
+
+  .admin-brand-mark--photo .admin-brand-mark__img {
+    width: auto;
+    height: 100%;
+  }
+
+  /* The badge's margin/width come from an inline style in AdminShell.jsx, so
+     this needs !important to win the cascade. No `order` override: the badge
+     sits right after .admin-brand in the DOM, and .admin-brand's margin-right:
+     auto pushes it to the far right of row A — filling space that would
+     otherwise be empty, instead of crowding row B after Settings. */
+  .admin-mode-badge {
+    margin: 0 !important;
+  }
+
+  .admin-nav--vertical {
+    flex-direction: row;
+    flex-wrap: wrap;
+    width: auto;
+    margin-top: 0;
+    gap: 6px;
+  }
+
+  .admin-nav.admin-nav--vertical > button {
+    width: auto;
+  }
+
+  /* margin-top: auto pins this to the bottom of a column; in a row it would
+     push the button onto its own line. */
+  .admin-sidebar__bottom {
+    margin-top: 0;
+    position: relative;
+  }
+
+  /* In the column layout the panel simply stacks above the button. In a row
+     that would grow the bar, so float it under the button instead. */
+  .admin-settings-panel {
+    position: absolute;
+    top: calc(100% + 6px);
+    right: 0;
+    z-index: 20;
+    min-width: 180px;
+  }
+
+  .admin-body {
+    /* No longer owns the viewport height — the top bar sits above it. */
+    height: auto;
+    flex: 1;
+    min-height: 0;
+  }
+
+  .admin-toolbar {
+    padding: 8px var(--admin-gutter);
+  }
+
+  .admin-main {
+    padding-top: 18px;
+    padding-bottom: 24px;
+  }
+
+  /* Vertical space is the scarce resource in a portrait window, so the page
+     header gives some back. */
+  .admin-page-head {
+    margin-bottom: 18px;
+  }
+
+  .admin-page-title {
+    font-size: 1.5rem;
+  }
+
+  /* Event cards are text-dense — one full-width column reads better than two
+     squeezed ones. Template cards are just artwork + two buttons, so two-up
+     uses the width instead of stranding ~240px of empty space beside a single
+     fixed 300px card. */
+  .card-grid--templates {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 14px;
+  }
+}
+
+@media (max-width: 560px) {
+  .admin-page-head {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 12px;
+  }
+
+  .admin-page-head__actions {
+    justify-content: flex-start;
+  }
+
+  .admin-page-title {
+    font-size: 1.45rem;
+  }
 }

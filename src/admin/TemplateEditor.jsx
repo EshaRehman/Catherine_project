@@ -163,22 +163,24 @@ function PositionMiniPad({ title, marker, x, y, onPlace }) {
   );
 }
 
+/* Prompts run 1-4. A photo with more than 4 people falls back to the 4-person
+   prompt (see MAX_PEOPLE in the backend's routes/generate.py). */
 const PEOPLE_OPTIONS = [
   { value: 1, label: '1 Person' },
   { value: 2, label: '2 People' },
   { value: 3, label: '3 People' },
   { value: 4, label: '4 People' },
-  { value: 5, label: '5 People' },
 ];
 
 const BASE_PROMPT_MAX = 10000;
 const PEOPLE_PROMPT_MAX = 10000;
 
-const defaultPeoplePrompts = () => ({ 1: '', 2: '', 3: '', 4: '', 5: '' });
+const defaultPeoplePrompts = () => ({ 1: '', 2: '', 3: '', 4: '' });
 
 const SCENE_VAR_FIELDS = [
   { key: 'poses',       label: 'Poses',       placeholder: 'e.g. commanding', token: '{pose}' },
   { key: 'expressions', label: 'Expressions', placeholder: 'e.g. smiling',    token: '{expression}' },
+  { key: 'angles',      label: 'Camera angles', placeholder: 'e.g. front-on', token: '{angle}' },
   { key: 'sizes',       label: 'Sizes',       placeholder: 'e.g. 50%',        token: '{size}' },
   { key: 'placements',  label: 'Placements',  placeholder: 'e.g. center',     token: '{placement}' },
 ];
@@ -270,6 +272,7 @@ export function TemplateEditor() {
   const [expressions, setExpressions] = useState([]);
   const [sizes, setSizes] = useState([]);
   const [placements, setPlacements] = useState([]);
+  const [angles, setAngles] = useState([]);
   const [saveStatus, setSaveStatus] = useState(null); // null | 'saving' | 'error'
   const [saveError, setSaveError] = useState('');
   const [loading, setLoading] = useState(false);
@@ -286,6 +289,7 @@ export function TemplateEditor() {
   const expressionsRef = useRef(expressions);
   const sizesRef = useRef(sizes);
   const placementsRef = useRef(placements);
+  const anglesRef = useRef(angles);
   const aiModeRef = useRef(settings.aiMode);
 
   const updatePeoplePrompt = (count, value) => {
@@ -331,6 +335,7 @@ export function TemplateEditor() {
           setExpressions(Array.isArray(t.expressions) ? t.expressions : []);
           setSizes(Array.isArray(t.sizes) ? t.sizes : []);
           setPlacements(Array.isArray(t.placements) ? t.placements : []);
+          setAngles(Array.isArray(t.angles) ? t.angles : []);
         } else {
            // Handle error finding it
            setDraft(createDefaultTemplate());
@@ -382,6 +387,7 @@ export function TemplateEditor() {
   useEffect(() => { expressionsRef.current = expressions; }, [expressions]);
   useEffect(() => { sizesRef.current = sizes; }, [sizes]);
   useEffect(() => { placementsRef.current = placements; }, [placements]);
+  useEffect(() => { anglesRef.current = angles; }, [angles]);
   useEffect(() => { aiModeRef.current = settings.aiMode; }, [settings.aiMode]);
 
   // Live idle preview: re-render whenever draft settings change
@@ -452,6 +458,7 @@ export function TemplateEditor() {
       '{expression}': expressionsRef.current,
       '{size}': sizesRef.current,
       '{placement}': placementsRef.current,
+      '{angle}': anglesRef.current,
     };
     for (const [token, options] of Object.entries(sceneVarMap)) {
       if (combined.includes(token) && options.length) {
@@ -580,12 +587,12 @@ export function TemplateEditor() {
         2: peoplePrompts[2] || '',
         3: peoplePrompts[3] || '',
         4: peoplePrompts[4] || '',
-        5: peoplePrompts[5] || '',
       },
       poses,
       expressions,
       sizes,
       placements,
+      angles,
       overlayText: draft.overlayText || '',
       fontFamily: draft.fontFamily || '',
       fontSize: draft.fontSize || 42,
@@ -921,8 +928,8 @@ export function TemplateEditor() {
               </div>
               <div className="gen-sub-card__body" style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
                 {SCENE_VAR_FIELDS.map((field) => {
-                  const stateMap = { poses, expressions, sizes, placements };
-                  const setterMap = { poses: setPoses, expressions: setExpressions, sizes: setSizes, placements: setPlacements };
+                  const stateMap = { poses, expressions, sizes, placements, angles };
+                  const setterMap = { poses: setPoses, expressions: setExpressions, sizes: setSizes, placements: setPlacements, angles: setAngles };
                   return (
                     <TagInput
                       key={field.key}

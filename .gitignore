@@ -94,3 +94,7 @@ out/
 # Gmail OAuth (do not commit)
 client_secret*.json
 gmail-oauth-tokens.json
+
+# Windows artifact: literal "dev
+ull" folder from a > /dev/null redirect
+dev/null/

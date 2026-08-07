@@ -56,11 +56,16 @@ export function AdminShell({ children }) {
   return (
     <>
       <aside className="admin-sidebar">
+        {/* Logo only — the artwork already carries the wordmark, so repeating
+            the brand name beside it just eats width in the portrait bar. */}
         <div className="admin-brand">
-          <div className="admin-brand-mark admin-brand-mark--photo" aria-hidden>
-            <img className="admin-brand-mark__img" src={adminBrandMark} alt="" />
+          <div className="admin-brand-mark admin-brand-mark--photo">
+            <img
+              className="admin-brand-mark__img"
+              src={adminBrandMark}
+              alt={settings.brandName || 'Catherine'}
+            />
           </div>
-          <span className="admin-brand-text">{settings.brandName || 'Catherine'}</span>
         </div>
         <div
           className="admin-mode-badge"

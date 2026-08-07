@@ -2,16 +2,8 @@ import React, { useState } from 'react';
 import { useApp } from '../state/AppContext.jsx';
 
 const MODE_OPTIONS = [
-  {
-    value: 'local',
-    label: 'Local AI',
-    description: 'Runs on this machine’s ComfyUI. No per-image cost.',
-  },
-  {
-    value: 'paid',
-    label: 'Paid API',
-    description: 'Sends photos to OpenAI (gpt-image-2). Costs per image.',
-  },
+  { value: 'local', label: 'Local AI' },
+  { value: 'paid', label: 'Paid API' },
 ];
 
 export function AdminUnlockModal({ open, onClose }) {
@@ -50,21 +42,18 @@ export function AdminUnlockModal({ open, onClose }) {
       <div className="modal-backdrop" role="dialog" aria-modal="true" aria-label="Choose AI mode">
         <div className="modal">
           <h2>Choose AI mode</h2>
-          <p>Events and templates are kept separate per mode. Pick which one to open.</p>
           <div className="modal-actions" style={{ flexDirection: 'column', gap: 10, alignItems: 'stretch' }}>
             {MODE_OPTIONS.map((opt) => (
               <button
                 key={opt.value}
                 type="button"
-                className={`btn ${settings.aiMode === opt.value ? 'btn-primary' : 'btn-ghost'}`}
-                style={{ textAlign: 'left', display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 4, padding: '12px 14px' }}
+                className={`btn btn-ghost mode-option${
+                  settings.aiMode === opt.value ? ' mode-option--current' : ''
+                }`}
+                aria-pressed={settings.aiMode === opt.value}
                 onClick={() => chooseMode(opt.value)}
               >
-                <span style={{ fontWeight: 600 }}>
-                  {opt.label}
-                  {settings.aiMode === opt.value ? ' (current)' : ''}
-                </span>
-                <span style={{ fontSize: '0.8rem', opacity: 0.8, fontWeight: 400 }}>{opt.description}</span>
+                {opt.label}
               </button>
             ))}
           </div>
