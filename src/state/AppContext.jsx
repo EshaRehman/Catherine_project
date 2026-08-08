@@ -243,6 +243,20 @@ export function AppProvider({ children }) {
     setAdminRoute('eventForm');
   }, []);
 
+  /* Templates and events are scoped to an aiMode, so the IDs held in the admin
+     navigation state are only valid for the mode they were opened in.
+     "Live experience" only flips mode to 'kiosk' and leaves adminRoute and
+     editorTemplateId untouched, so re-entering admin in the other mode restored
+     the editor on a template belonging to the previous mode — a paid template
+     showing while the app was scoped to local. Clearing the ID-carrying state
+     on entry keeps admin consistent with whichever mode was just chosen. */
+  const resetAdminNav = useCallback(() => {
+    setEditorTemplateId(null);
+    setEditorIsNew(false);
+    setEventFormId(null);
+    setAdminRoute('events');
+  }, []);
+
   const value = useMemo(
     () => ({
       hydrated,
@@ -256,6 +270,7 @@ export function AppProvider({ children }) {
       setEventFormId,
       openEventForm,
       openTemplateEditor,
+      resetAdminNav,
       templates,
       setTemplates,
       events,
@@ -289,6 +304,7 @@ export function AppProvider({ children }) {
       eventFormId,
       openEventForm,
       openTemplateEditor,
+      resetAdminNav,
       templates,
       events,
       settings,

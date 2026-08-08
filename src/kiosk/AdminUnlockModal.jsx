@@ -7,7 +7,7 @@ const MODE_OPTIONS = [
 ];
 
 export function AdminUnlockModal({ open, onClose }) {
-  const { adminPassword, setMode, settings, setSettings } = useApp();
+  const { adminPassword, setMode, settings, setSettings, resetAdminNav } = useApp();
   const [step, setStep] = useState('password'); // 'password' | 'mode'
   const [value, setValue] = useState('');
   const [error, setError] = useState(false);
@@ -33,6 +33,10 @@ export function AdminUnlockModal({ open, onClose }) {
   const chooseMode = (aiMode) => {
     setSettings((s) => ({ ...s, aiMode }));
     reset();
+    // Drop any template/event the previous admin session left open — those IDs
+    // belong to the mode that was active then, and restoring them here showed a
+    // paid template while the app was scoped to local (and vice versa).
+    resetAdminNav();
     setMode('admin');
     onClose();
   };

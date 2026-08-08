@@ -6,7 +6,20 @@ import processingVideoUrl from './processingVideoMedia.js';
 /** Must match the longest transition on .kiosk-portrait-frame__reveal in index.css. */
 const REVEAL_MS = 1400;
 
-export function ProcessingScreen({ subjectDataUrl, template, eventId, onDone }) {
+/**
+ * Recognises the one generate failure that is the guest's to fix: YOLO found
+ * nobody in the frame. Matches the 400 detail raised by
+ * routes/generate.py ("No people detected in the uploaded image"); the wording
+ * is deliberately matched loosely so a reworded message still lands here.
+ *
+ * Every other failure (ComfyUI down, OpenAI error, bad template) is not
+ * something retrying will fix, so those keep the existing behaviour rather than
+ * bouncing the guest round the camera loop forever.
+ */
+const isNoPersonError = (error) =>
+  typeof error === 'string' && /no\s+(?:people|person|persons)\s+detected/i.test(error);
+
+export function ProcessingScreen({ subjectDataUrl, template, eventId, onDone, onNoPerson }) {
   const videoRef = useRef(null);
   const timerRef = useRef(null);
 
@@ -82,6 +95,14 @@ export function ProcessingScreen({ subjectDataUrl, template, eventId, onDone }) 
       } else {
         console.error('[ProcessingScreen] generate failed:', result.error);
         if (video) { video.loop = false; video.pause(); }
+
+        if (isNoPersonError(result.error) && onNoPerson) {
+          // Nothing was generated, so there is no picture to reveal. Handing
+          // subjectDataUrl to onDone here is what made the kiosk present the
+          // guest's own untouched photo as the finished result.
+          onNoPerson();
+          return;
+        }
         onDone(subjectDataUrl, null);
       }
     };
@@ -92,7 +113,7 @@ export function ProcessingScreen({ subjectDataUrl, template, eventId, onDone }) 
       alive = false;
       if (timerRef.current) clearTimeout(timerRef.current);
     };
-  }, [subjectDataUrl, template, onDone]);
+  }, [subjectDataUrl, template, onDone, onNoPerson]);
 
   return (
     <div className="camera-screen camera-screen--processing">

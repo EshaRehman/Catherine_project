@@ -8,6 +8,7 @@ import { CameraReadyScreen } from './CameraReadyScreen.jsx';
 import { CameraScreen } from './CameraScreen.jsx';
 import { CapturePreviewScreen } from './CapturePreviewScreen.jsx';
 import { ProcessingScreen } from './ProcessingScreen.jsx';
+import { RetryTransitionScreen } from './RetryTransitionScreen.jsx';
 import { ResultScreen } from './ResultScreen.jsx';
 import { QRScreen } from './QRScreen.jsx';
 import { getEvents, getTemplates } from '../utils/api.js';
@@ -176,7 +177,21 @@ export function KioskApp() {
             setDownloadUrl(dlUrl);
             setPhase('result');
           }}
+          /* Nobody was found in the shot, so there is no result to show. This
+             used to fall through to onDone(subjectDataUrl), which presented the
+             guest's untouched photo as though the AI had produced it. Play the
+             retry clip and reopen the camera instead. */
+          onNoPerson={() => {
+            setResultDataUrl(null);
+            setDownloadUrl(null);
+            setSubjectDataUrl(null);
+            setPhase('retrying');
+          }}
         />
+      )}
+
+      {phase === 'retrying' && (
+        <RetryTransitionScreen onDone={() => setPhase('camera')} />
       )}
 
       {phase === 'result' && resultDataUrl && selectedTemplate && (
@@ -187,7 +202,10 @@ export function KioskApp() {
           onRegenerate={() => {
             setResultDataUrl(null);
             setSubjectDataUrl(null);
-            setPhase('camera');
+            setDownloadUrl(null);
+            // Via the retry clip rather than straight to the camera, so the
+            // guest gets a beat of feedback instead of a hard cut.
+            setPhase('retrying');
           }}
         />
       )}

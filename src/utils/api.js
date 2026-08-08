@@ -60,6 +60,10 @@ export async function createEvent(eventData) {
   return apiRequest('POST', '/create-event', eventData);
 }
 
+export async function updateEvent(id, eventData) {
+  return apiRequest('PUT', `/edit-event/${id}`, eventData);
+}
+
 export async function getEvents(mode) {
   const qs = mode ? `?mode=${encodeURIComponent(mode)}` : '';
   return apiRequest('GET', `/show-events${qs}`);

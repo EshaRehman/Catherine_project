@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useApp } from '../state/AppContext.jsx';
 import { TemplateThemePreview } from '../components/TemplateThemePreview.jsx';
-import { createEvent, getTemplates, getEvents } from '../utils/api.js';
+import { createEvent, updateEvent, getTemplates, getEvents } from '../utils/api.js';
 
 function TemplatePickCard({ template, selected, onToggle }) {
   return (
@@ -121,9 +121,12 @@ export function CreateEvent() {
       mode: settings.aiMode,
     };
 
-    // Right now there isn't an edit event API mentioned, so we will use createEvent 
-    // for everything, or ideally you'd have an updateEvent later.
-    const res = await createEvent(payload);
+    // Editing must PUT to the existing event. This used to call createEvent for
+    // both paths, which minted a fresh eventId and left the original behind as a
+    // duplicate (or 400'd because the image folder already existed).
+    const res = existing
+      ? await updateEvent(existing.id, payload)
+      : await createEvent(payload);
     
     if (res.ok) {
       setAdminRoute('events');

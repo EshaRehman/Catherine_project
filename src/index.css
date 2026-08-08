@@ -1720,6 +1720,20 @@ select {
   gap: 20px;
 }
 
+/* .preview-stage-wrap--editor (defined ~430 lines above) also sets position, but
+   both selectors are a single class, so this later rule silently won and the
+   editor preview was sticky after all. Harmless while the form had its own
+   scrollbar — the page never scrolled, so sticky had nothing to stick to. The
+   moment the page itself scrolls, the preview pins and the form slides
+   underneath it, covering the prompt fields.
+   Compounding both classes raises specificity so the editor variant wins
+   regardless of source order. */
+.preview-stage-wrap.preview-stage-wrap--editor {
+  position: relative;
+  top: auto;
+  gap: 12px;
+}
+
 .preview-stage {
   width: 100%;
   max-width: 420px;
@@ -1746,11 +1760,34 @@ select {
 }
 
 @media (max-width: 1100px) {
+  /* The editor's `calc(100dvh - 188px)` assumes desktop chrome. In the portrait
+     admin window the chrome is much taller (top bar + nav row + toolbar + page
+     heading), so that height overshoots the space available and, with
+     `overflow: hidden` on the split, the bottom of the form is clipped out of
+     reach — you can see a scrollbar but never get to the end.
+
+     Once the split is single-column there is no reason to nest a scroller
+     inside a scroller: let the whole page size to its content and hand the
+     scrolling to .admin-main, which already does it. One scrollbar, nothing
+     unreachable. */
+  .template-editor-page {
+    height: auto;
+    max-height: none;
+  }
+
   .template-editor-page__split {
     grid-template-columns: 1fr;
-    /* Preview row sizes to content; form row fills remaining height and scrolls */
-    grid-template-rows: auto minmax(0, 1fr);
+    /* Both rows size to content now that the page itself scrolls. */
+    grid-template-rows: auto auto;
+    height: auto;
     max-height: none;
+    overflow: visible;
+  }
+
+  .editor-scroll {
+    /* Same hardcoded-viewport problem: calc(100vh - 200px) on an inner panel. */
+    max-height: none;
+    overflow: visible;
   }
 
   .preview-stage-wrap--editor {
@@ -1850,6 +1887,34 @@ select {
    left/right (~1.5% per side) — not perceptible. Responsive: sized in viewport
    units so it tracks any resolution while keeping the same behavior. */
 .kiosk-idle__video--fullscreen {
+  position: fixed;
+  inset: 0;
+  width: 100vw;
+  width: 100dvw;
+  height: 100vh;
+  height: 100dvh;
+  object-fit: cover;
+  object-position: center center;
+  z-index: 0;
+  border-radius: 0;
+  background: #000;
+}
+
+/* --- Retry transition ---
+   Full-bleed clip played on the way back to the camera, either from "Try again"
+   or after the AI found nobody in the shot. Full-bleed rather than inside the
+   portrait frame because the source is 720x1280 (0.5625) against this window's
+   685x1214 (0.564) — near-identical, so cover crops almost nothing, and the
+   clip's own black margins read as background instead of letterboxing. */
+.kiosk-retry-screen {
+  position: relative;
+  min-height: 100vh;
+  min-height: 100dvh;
+  overflow: hidden;
+  background: var(--bg);
+}
+
+.kiosk-retry-screen__media {
   position: fixed;
   inset: 0;
   width: 100vw;

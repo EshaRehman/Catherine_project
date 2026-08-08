@@ -2,9 +2,15 @@ import React, { useState } from 'react';
 import { TemplateThemePreview } from '../components/TemplateThemePreview.jsx';
 
 export function TemplateSelectScreen({ templates, onPick, onBack }) {
-  // Tapping the card body only previews it (reveals the Select pill +
-  // highlight ring, same as before). Only tapping Select itself commits —
-  // briefly flash its border, then advance to the next screen.
+  // One tap commits. This used to be two-step — the card body only revealed the
+  // Select pill and you had to hit the pill itself to advance — but on a touch
+  // kiosk that reads as an unresponsive card: guests tapped the artwork, saw a
+  // highlight, and tapped again. The Select pill is kept for the affordance and
+  // still works; it just no longer gates the flow.
+  //
+  // The trade-off is deliberate: a mis-tap now advances instead of only
+  // highlighting. handleConfirm's committingId guard means the first tap wins and
+  // further taps are ignored, so a double-tap cannot fire onPick twice.
   const [activeId, setActiveId] = useState(null);
   const [committingId, setCommittingId] = useState(null);
 
@@ -38,11 +44,11 @@ export function TemplateSelectScreen({ templates, onPick, onBack }) {
                   role="group"
                   aria-label={t.name}
                   tabIndex={0}
-                  onClick={() => setActiveId(t.id)}
+                  onClick={() => handleConfirm(t.id)}
                   onKeyDown={(e) => {
                     if (e.key === 'Enter' || e.key === ' ') {
                       e.preventDefault();
-                      setActiveId(t.id);
+                      handleConfirm(t.id);
                     }
                   }}
                 >
