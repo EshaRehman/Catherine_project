@@ -1901,30 +1901,25 @@ select {
 }
 
 /* --- Retry transition ---
-   Full-bleed clip played on the way back to the camera, either from "Try again"
-   or after the AI found nobody in the shot. Full-bleed rather than inside the
-   portrait frame because the source is 720x1280 (0.5625) against this window's
-   685x1214 (0.564) — near-identical, so cover crops almost nothing, and the
-   clip's own black margins read as background instead of letterboxing. */
-.kiosk-retry-screen {
-  position: relative;
-  min-height: 100vh;
-  min-height: 100dvh;
-  overflow: hidden;
-  background: var(--bg);
+   Clip played on the way back to the camera, either from "Try again" or after
+   the AI found nobody in the shot.
+
+   Framed, not full-bleed. It used to play edge-to-edge, so the flow went from
+   the framed processing stage, out to a fullscreen video, then back into the
+   framed camera — the stage jumped size twice on the way round. It now reuses
+   the same .camera-screen / .kiosk-flow-viewport / .kiosk-flow-frame shell as
+   the processing stage, which pins it to the identical box, and its source is
+   pre-reframed to 1080x1320 to fill that box (see retryVideoMedia.js). */
+.kiosk-portrait-frame--retry {
+  background: #000;
+  border: 3px solid #7B2CFF;
+  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.5);
 }
 
-.kiosk-retry-screen__media {
-  position: fixed;
-  inset: 0;
-  width: 100vw;
-  width: 100dvw;
-  height: 100vh;
-  height: 100dvh;
+/* cover, matching the processing loop: the clip is pre-rendered at the frame's
+   own 1080x1320 ratio, so cover fills it edge to edge with nothing clipped. */
+.kiosk-portrait-frame--retry .kiosk-portrait-frame__media {
   object-fit: cover;
-  object-position: center center;
-  z-index: 0;
-  border-radius: 0;
   background: #000;
 }
 
@@ -3922,15 +3917,20 @@ select {
 }
 
 /* ProcessingScreen hands over with the picture already faded in, so the frame
-   itself doesn't move. These buttons are the only new thing on screen — easing
-   them up keeps the handover continuous instead of snapping into place. */
+   itself doesn't move. These buttons are the only new thing on screen, so they
+   get a small settle — but they must NOT fade up from invisible.
+   This used to start at `opacity: 0` over 520ms, which read as the buttons
+   arriving noticeably after the finished photo: the picture was already there
+   and the controls trailed in behind it. Animating only the offset keeps them
+   fully opaque from the first frame, so they land with the image, and the
+   distance/duration are halved so the settle is felt rather than watched. */
 @keyframes result-actions-in {
-  from { opacity: 0; transform: translateY(10px); }
-  to   { opacity: 1; transform: none; }
+  from { transform: translateY(5px); }
+  to   { transform: none; }
 }
 
 .result-actions--split {
-  animation: result-actions-in 520ms cubic-bezier(0.22, 0.61, 0.36, 1) both;
+  animation: result-actions-in 220ms cubic-bezier(0.22, 0.61, 0.36, 1) both;
 }
 
 @media (prefers-reduced-motion: reduce) {

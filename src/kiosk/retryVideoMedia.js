@@ -2,15 +2,32 @@
  * "Going back for another go" clip, shown between a finished/failed attempt and
  * the camera reopening.
  *
- * Unlike the processing clip this one is NOT reframed to the portrait frame's
- * 1080x1320. It plays full-bleed instead, and the source already fits that
- * almost exactly: 720x1280 is a ratio of 0.5625 against the kiosk window's
- * 685x1214 = 0.564, so object-fit: cover crops well under a percent. The
- * source's black margins (36px left / 76px right / 144px top / 186px bottom)
- * disappear into the app's dark background rather than reading as letterboxing,
- * which is why the crop/pad/scale dance in processingVideoMedia.js is not
- * needed here.
+ * REFRAMED to 1080x1320 — the portrait frame's own ratio — for the same reason
+ * the processing loop is: this clip now plays inside .kiosk-portrait-frame
+ * rather than full-bleed, and the raw source is 720x1280 (0.5625) against the
+ * frame's 0.818, so object-fit: cover would have cropped it hard.
+ *
+ * The source carries 36/76 left/right and 144/186 top/bottom of black margin
+ * (ffmpeg cropdetect agrees: crop=608:952:36:144). Cropping to that content and
+ * padding back out to a 9:11 box puts the mascot at 94.1% of the frame height —
+ * matching the processing clip's 94.2%, so the robot reads at the same size
+ * across both stages. Content sits at 73% of the width rather than the
+ * processing clip's 85%, which is inherent: this artwork is narrower and taller.
+ * The side margin is pure black and so is the clip's own background — measured
+ * (0,0,0) in both the letterbox and behind the mascot — so the padding is
+ * genuinely invisible. (The processing source is NOT pure black there, which is
+ * why its pad boundary can be faintly visible; this one has no such seam.)
+ *
+ * No loop treatment here: RetryTransitionScreen plays it once and caps playback,
+ * so the first/last frame mismatch that the processing loop had to solve never
+ * shows.
+ *
+ * To regenerate after editing the source:
+ *   ffmpeg -i Robot_loading_animation_design_202608081030.mp4 \
+ *     -vf "fps=24,crop=608:952:36:144,pad=828:1012:110:30:black,\
+ *          scale=1080:1320,format=yuv420p" \
+ *     -an -c:v libx264 -crf 18 -preset slow Robot_retry_framed.mp4
  */
-import retryVideoUrl from '../../Robot_loading_animation_design_202608081030.mp4';
+import retryVideoUrl from '../../Robot_retry_framed.mp4';
 
 export default retryVideoUrl;
