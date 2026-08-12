@@ -1203,11 +1203,19 @@ select {
   justify-content: start;
 }
 
+/* Two cards per row in the narrow admin window instead of one.
+   The old rule was minmax(210px, 280px) with the shared 28px gap, which needs
+   210 + 28 + 210 = 448px of content box; the event panel offers ~439px, so it
+   fell one column short and stacked every template vertically. A smaller track
+   minimum and a tighter gap fit two comfortably, and the 1fr maximum lets them
+   share the row evenly rather than leaving a ragged strip on the right.
+   auto-fill still adds columns on a wider window. */
 .panel--event-form .kiosk-templates-grid--themes.kiosk-templates-grid--inline {
   max-width: none;
   width: 100%;
-  grid-template-columns: repeat(auto-fill, minmax(210px, 280px));
-  justify-content: start;
+  gap: 16px;
+  grid-template-columns: repeat(auto-fill, minmax(min(170px, 100%), 1fr));
+  justify-content: center;
 }
 
 /* --- Template editor split --- */
@@ -1223,6 +1231,19 @@ select {
 .template-editor-page__head {
   flex-shrink: 0;
   margin-bottom: 16px;
+  /* The head is a flex ROW inherited from .admin-page-head (title | actions).
+     The save-error banner is a third child, so without wrapping it competes for
+     the same row: the titles block (flex: 1; min-width: 0) collapses to a single
+     word per line and the buttons pile up on top of it. Wrapping puts the
+     banner on its own line and leaves the row above untouched. */
+  flex-wrap: wrap;
+}
+
+/* Compound selector so this beats the width: 100% on .template-save-error
+   regardless of source order. */
+.template-editor-page__head .template-save-error {
+  flex: 0 0 100%;
+  order: 3;
 }
 
 .template-editor-page__actions {

@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useApp } from '../state/AppContext.jsx';
 import { createTemplate, updateTemplate, getTemplateById, previewImageApi } from '../utils/api.js';
 import { compositePreviewMock, compositeResultPreview } from '../utils/composite.js';
@@ -177,6 +177,74 @@ const PEOPLE_PROMPT_MAX = 10000;
 
 const defaultPeoplePrompts = () => ({ 1: '', 2: '', 3: '', 4: '' });
 
+/**
+ * Build a background from the template name alone.
+ *
+ * The API requires templateImageUrl (TemplateCreate sets min_length=1), but a
+ * background is only ever a card/backdrop image — nothing about generation
+ * depends on it. Rather than refuse the save, stand in a titled panel so a
+ * template can be created from its prompts alone and a real image dropped in
+ * later. Drawn at the booth's 1080x1320 capture aspect.
+ */
+function makeNamePlaceholderBackground(name) {
+  const W = 1080, H = 1320;
+  const canvas = document.createElement('canvas');
+  canvas.width = W;
+  canvas.height = H;
+  const ctx = canvas.getContext('2d');
+
+  const bg = ctx.createLinearGradient(0, 0, W, H);
+  bg.addColorStop(0, '#161a2e');
+  bg.addColorStop(0.55, '#1d1b33');
+  bg.addColorStop(1, '#241a2c');
+  ctx.fillStyle = bg;
+  ctx.fillRect(0, 0, W, H);
+
+  // Soft glow so the flat gradient does not read as a broken/missing image.
+  const glow = ctx.createRadialGradient(W / 2, H * 0.38, 0, W / 2, H * 0.38, W * 0.72);
+  glow.addColorStop(0, 'rgba(124, 92, 255, 0.30)');
+  glow.addColorStop(1, 'rgba(124, 92, 255, 0)');
+  ctx.fillStyle = glow;
+  ctx.fillRect(0, 0, W, H);
+
+  ctx.strokeStyle = 'rgba(255, 255, 255, 0.14)';
+  ctx.lineWidth = 3;
+  ctx.strokeRect(40, 40, W - 80, H - 80);
+
+  // Wrap the name by words so a long title stays inside the frame.
+  const title = (name || 'Untitled').trim() || 'Untitled';
+  ctx.font = '700 92px "DM Sans", system-ui, sans-serif';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  const maxW = W - 200;
+  const lines = [];
+  let line = '';
+  for (const word of title.split(/\s+/)) {
+    const next = line ? `${line} ${word}` : word;
+    if (ctx.measureText(next).width > maxW && line) {
+      lines.push(line);
+      line = word;
+    } else {
+      line = next;
+    }
+  }
+  if (line) lines.push(line);
+
+  const lineH = 108;
+  let y = H / 2 - ((lines.length - 1) * lineH) / 2;
+  ctx.fillStyle = '#ffffff';
+  for (const l of lines) {
+    ctx.fillText(l, W / 2, y);
+    y += lineH;
+  }
+
+  /* Deliberately no caption line. This image is a real background — the kiosk
+     shows it behind the result, where it gets cropped mid-word and reads as a
+     broken asset. The name alone is the whole design. */
+
+  return canvas.toDataURL('image/jpeg', 0.9);
+}
+
 const SCENE_VAR_FIELDS = [
   { key: 'poses',       label: 'Poses',       placeholder: 'e.g. commanding', token: '{pose}' },
   { key: 'expressions', label: 'Expressions', placeholder: 'e.g. smiling',    token: '{expression}' },
@@ -185,7 +253,21 @@ const SCENE_VAR_FIELDS = [
   { key: 'placements',  label: 'Placements',  placeholder: 'e.g. center',     token: '{placement}' },
 ];
 
-function TagInput({ label, token, placeholder, items, onChange }) {
+/* Per-variable state, derived from whether the prompts actually reference the
+   token. Kept in one place so the wording and the colour always agree.
+     ok      — token used, options present: substitution will work
+     missing — token used, no options: substitute_scene_vars leaves the token in
+               the prompt, so the AI is literally sent "{pose}"
+     unused  — options present, no prompt references the token: dead data
+     idle    — neither: nothing to say */
+const VAR_STATUS = {
+  ok:      { color: '#5cd6a0', text: (t) => `Used by your prompt — one option replaces ${t} at generation time.` },
+  missing: { color: '#ff8f6b', text: (t) => `Your prompt uses ${t} but there are no options, so the AI is sent the literal text ${t}. Add at least one option.` },
+  unused:  { color: '#e0b356', text: (t) => `No prompt references ${t}, so these options are never used.` },
+  idle:    { color: null,      text: () => 'Not used by this template.' },
+};
+
+function TagInput({ label, token, placeholder, items, onChange, status = 'idle' }) {
   const [input, setInput] = useState('');
 
   const add = () => {
@@ -239,9 +321,9 @@ function TagInput({ label, token, placeholder, items, onChange }) {
           ))}
         </div>
       )}
-      {items.length === 0 && (
-        <p className="field-help">No options yet — one will be picked randomly at generation time.</p>
-      )}
+      <p className="field-help" style={VAR_STATUS[status].color ? { color: VAR_STATUS[status].color } : undefined}>
+        {VAR_STATUS[status].text(token)}
+      </p>
     </div>
   );
 }
@@ -262,6 +344,8 @@ export function TemplateEditor() {
   const [idlePreviewUrl, setIdlePreviewUrl] = useState(null);
   const [previewError, setPreviewError] = useState(null);
   const [showResultModal, setShowResultModal] = useState(false);
+  /* null when closed, otherwise the list of person counts with no prompt yet. */
+  const [promptGate, setPromptGate] = useState(null);
   const [stageScale, setStageScale] = useState(1); // preview stage width / 1080
   const [camReady, setCamReady] = useState(false);
   const [camCount, setCamCount] = useState(0);
@@ -279,6 +363,7 @@ export function TemplateEditor() {
   const stageRef = useRef(null);
   const dragRef = useRef(null);
   const camVideoRef = useRef(null);
+  const promptTextareaRef = useRef(null);
   const camStreamRef = useRef(null);
   const camCountRunRef = useRef(0);
   const basePromptRef = useRef(basePrompt);
@@ -295,6 +380,22 @@ export function TemplateEditor() {
   const updatePeoplePrompt = (count, value) => {
     setPeoplePrompts((prev) => ({ ...prev, [count]: value }));
   };
+
+  /* Everything that lives outside `draft`. The load effect below MUST run this
+     on every path that is not "loaded an existing template", otherwise the
+     previous template's prompts and scene variables stay on screen and get
+     saved onto whatever is opened next — including across a local/paid mode
+     switch, and including onto a brand-new template. */
+  const resetPromptFields = useCallback(() => {
+    setBasePrompt('');
+    setPeoplePrompts(defaultPeoplePrompts());
+    setNumberOfPeople(1);
+    setPoses([]);
+    setExpressions([]);
+    setSizes([]);
+    setPlacements([]);
+    setAngles([]);
+  }, []);
 
   useEffect(() => {
     const loadData = async () => {
@@ -328,9 +429,11 @@ export function TemplateEditor() {
 
           setDraft(copy);
           setBasePrompt(t.basePrompt || '');
-          if (t.peoplePrompts) {
-             setPeoplePrompts({...defaultPeoplePrompts(), ...t.peoplePrompts});
-          }
+          /* Always assign, never conditionally: a template with no saved
+             peoplePrompts must clear the form, not inherit the last one's
+             prompts and then save them over this template. */
+          setPeoplePrompts({ ...defaultPeoplePrompts(), ...(t.peoplePrompts || {}) });
+          setNumberOfPeople(1);
           setPoses(Array.isArray(t.poses) ? t.poses : []);
           setExpressions(Array.isArray(t.expressions) ? t.expressions : []);
           setSizes(Array.isArray(t.sizes) ? t.sizes : []);
@@ -339,15 +442,17 @@ export function TemplateEditor() {
         } else {
            // Handle error finding it
            setDraft(createDefaultTemplate());
+           resetPromptFields();
         }
         setLoading(false);
       } else {
         setDraft(createDefaultTemplate());
+        resetPromptFields();
       }
     };
-    
+
     loadData();
-  }, [editorTemplateId, editorIsNew]);
+  }, [editorTemplateId, editorIsNew, createDefaultTemplate, resetPromptFields]);
 
   const readFileDataUrl = (file) =>
     new Promise((resolve, reject) => {
@@ -377,6 +482,13 @@ export function TemplateEditor() {
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, [showResultModal]);
+
+  useEffect(() => {
+    if (!promptGate) return undefined;
+    const onKey = (e) => { if (e.key === 'Escape') setPromptGate(null); };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [promptGate]);
 
   // Keep refs in sync so snap() can read current values without stale closures
   useEffect(() => { basePromptRef.current = basePrompt; }, [basePrompt]);
@@ -573,9 +685,55 @@ export function TemplateEditor() {
     }
   }, [rawResultDataUrl, draft]);
 
+  /* Mirrors what the backend actually does at generation time
+     (substitute_scene_vars in routes/generate.py) so the editor can flag a
+     template that would generate badly *before* it is saved. The curated
+     templates never hit these cases; a hand-built one easily can. */
+  const promptCheck = useMemo(() => {
+    const counts = PEOPLE_OPTIONS.map((o) => o.value);
+    const emptyCounts = counts.filter((v) => !(peoplePrompts[v] || '').trim());
+    const allPromptText = counts.map((v) => peoplePrompts[v] || '').join('\n');
+    const stateMap = { poses, expressions, sizes, placements, angles };
+
+    const perField = {};
+    const tokensMissingOptions = [];
+    const optionsNeverUsed = [];
+    for (const field of SCENE_VAR_FIELDS) {
+      const tokenUsed = allPromptText.includes(field.token);
+      const hasOptions = stateMap[field.key].length > 0;
+      if (tokenUsed && hasOptions) perField[field.key] = 'ok';
+      else if (tokenUsed) { perField[field.key] = 'missing'; tokensMissingOptions.push(field); }
+      else if (hasOptions) { perField[field.key] = 'unused'; optionsNeverUsed.push(field); }
+      else perField[field.key] = 'idle';
+    }
+    return { emptyCounts, perField, tokensMissingOptions, optionsNeverUsed };
+  }, [peoplePrompts, poses, expressions, sizes, placements, angles]);
+
   const save = async (asNew) => {
+    /* The one hard requirement: a prompt for every person count. Everything
+       else on this page is optional. Without all four, a photo with that many
+       guests reaches the AI with an empty prompt (see get_people_prompt_for_count
+       — the key exists, so the backend does not error, it just generates from
+       nothing). Blocked here with a dialog naming the missing counts. */
+    if (promptCheck.emptyCounts.length > 0) {
+      setSaveStatus(null);
+      setSaveError('');
+      setPromptGate(promptCheck.emptyCounts);
+      return;
+    }
+
     setSaveStatus('saving');
     setSaveError('');
+
+    /* Save with or without a background. The API insists on a non-empty
+       templateImageUrl, so when none was uploaded, stand in a panel carrying
+       the template name instead of blocking the save. Mirrored back into the
+       draft so the editor shows what was actually stored. */
+    let backgroundUrl = draft.backgroundUrl;
+    if (!backgroundUrl) {
+      backgroundUrl = makeNamePlaceholderBackground(draft.name);
+      setDraft((d) => ({ ...d, backgroundUrl }));
+    }
 
     // Build the API payload
     const payload = {
@@ -602,7 +760,7 @@ export function TemplateEditor() {
         y: Math.round(draft.textY ?? 50),
       },
       logoUrl: draft.logoUrl || '',
-      templateImageUrl: draft.backgroundUrl || '',
+      templateImageUrl: backgroundUrl,
       logoScale: draft.logoScale ?? 0.08,
       logoLocked: false,
       logoPosition: {
@@ -842,7 +1000,9 @@ export function TemplateEditor() {
           <section className="editor-card gen-settings-card">
             <div className="gen-settings-header">
               <h2 className="gen-settings-title">Generation Settings</h2>
-              <p className="gen-settings-sub">Create your base prompt and generate prompts for 1 to 5 people.</p>
+              {/* 1 to 4, matching PEOPLE_OPTIONS and the backend's MAX_PEOPLE.
+                  A photo with more than 4 people reuses the 4-person prompt. */}
+              <p className="gen-settings-sub">Create your base prompt and generate prompts for 1 to 4 people.</p>
             </div>
 
             <div className="field gen-settings-name-field">
@@ -884,6 +1044,7 @@ export function TemplateEditor() {
                   ))}
                 </select>
                 <textarea
+                  ref={promptTextareaRef}
                   className="textarea gen-sub-card__textarea"
                   style={{ marginTop: 10 }}
                   rows={6}
@@ -938,11 +1099,51 @@ export function TemplateEditor() {
                       placeholder={field.placeholder}
                       items={stateMap[field.key]}
                       onChange={setterMap[field.key]}
+                      status={promptCheck.perField[field.key]}
                     />
                   );
                 })}
               </div>
             </div>
+
+            {/* Pre-save check. Only rendered when something is actually wrong,
+                so a correctly built template shows no clutter. */}
+            {(promptCheck.emptyCounts.length > 0 || promptCheck.tokensMissingOptions.length > 0) && (
+              <div className="gen-sub-card" style={{ borderColor: 'rgba(255,143,107,0.35)' }}>
+                <div className="gen-sub-card__header">
+                  <span className="gen-sub-card__icon" aria-hidden>
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
+                      <path d="M12 9v4M12 17h.01" />
+                    </svg>
+                  </span>
+                  <div>
+                    <div className="gen-sub-card__title">Needs attention before this template is used</div>
+                    <div className="gen-sub-card__desc">
+                      A missing prompt blocks saving. The rest is advisory — it would still save,
+                      but the generation would come out wrong.
+                    </div>
+                  </div>
+                </div>
+                <div className="gen-sub-card__body">
+                  <ul style={{ margin: 0, paddingLeft: 18, display: 'flex', flexDirection: 'column', gap: 8, fontSize: 13, color: '#e2c4b6' }}>
+                    {promptCheck.emptyCounts.length > 0 && (
+                      <li>
+                        No prompt written for{' '}
+                        <strong>{promptCheck.emptyCounts.map((c) => `${c} ${c === 1 ? 'person' : 'people'}`).join(', ')}</strong>.
+                        {' '}A photo with that many people would be sent an empty prompt. Fill all four using the number pills above.
+                      </li>
+                    )}
+                    {promptCheck.tokensMissingOptions.map((f) => (
+                      <li key={f.key}>
+                        Your prompt uses <code>{f.token}</code> but <strong>{f.label}</strong> has no options —
+                        the AI would receive the literal text <code>{f.token}</code>. Add an option or remove the token.
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              </div>
+            )}
 
           </section>
 
@@ -1073,6 +1274,108 @@ export function TemplateEditor() {
           </section>
         </div>
       </div>
+      )}
+
+      {/* Save gate: a prompt is required for all four person counts. Clicking a
+          count closes the dialog and drops the caret straight into that prompt. */}
+      {promptGate && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="prompt-gate-title"
+          onClick={() => setPromptGate(null)}
+          style={{
+            position: 'fixed', inset: 0, zIndex: 9999,
+            background: 'rgba(6,7,15,0.78)',
+            backdropFilter: 'blur(3px)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            padding: 20,
+          }}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              width: '100%', maxWidth: 440,
+              background: 'linear-gradient(180deg, #191c2e 0%, #14161f 100%)',
+              border: '1px solid rgba(255,255,255,0.12)',
+              borderRadius: 16,
+              boxShadow: '0 24px 60px rgba(0,0,0,0.55)',
+              padding: '22px 22px 18px',
+              color: '#e8e8ee',
+            }}
+          >
+            <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start' }}>
+              <span
+                aria-hidden
+                style={{
+                  flexShrink: 0, width: 36, height: 36, borderRadius: 10,
+                  background: 'rgba(255,143,107,0.14)',
+                  border: '1px solid rgba(255,143,107,0.32)',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  color: '#ff8f6b',
+                }}
+              >
+                <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
+                  <path d="M12 9v4M12 17h.01" />
+                </svg>
+              </span>
+              <div style={{ minWidth: 0 }}>
+                <h3 id="prompt-gate-title" style={{ margin: 0, fontSize: '1.02rem', fontWeight: 700, letterSpacing: '-0.01em' }}>
+                  Add a prompt for every person count
+                </h3>
+                <p style={{ margin: '7px 0 0', fontSize: 13, lineHeight: 1.5, color: '#a8abbd' }}>
+                  A template needs its own prompt for 1, 2, 3 and 4 people. Without one, a photo
+                  with that many guests is sent to the AI with an empty prompt. Everything else
+                  on this page is optional.
+                </p>
+              </div>
+            </div>
+
+            <p style={{ margin: '18px 0 8px', fontSize: 12, textTransform: 'uppercase', letterSpacing: '0.06em', color: '#7f8296' }}>
+              Still missing
+            </p>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+              {promptGate.map((count) => (
+                <button
+                  key={count}
+                  type="button"
+                  onClick={() => {
+                    setNumberOfPeople(count);
+                    setPromptGate(null);
+                    /* Land the operator in the box that needs filling. A short
+                       timeout rather than requestAnimationFrame: rAF can fire
+                       before React has committed the swapped-in textarea, and
+                       the focus is then lost. Focus first with preventScroll so
+                       the browser's instant jump does not fight the smooth
+                       scroll that follows. */
+                    setTimeout(() => {
+                      const el = promptTextareaRef.current;
+                      if (!el) return;
+                      el.focus({ preventScroll: true });
+                      el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    }, 60);
+                  }}
+                  style={{
+                    background: 'rgba(255,143,107,0.10)',
+                    border: '1px solid rgba(255,143,107,0.30)',
+                    color: '#ffb59a',
+                    borderRadius: 9, padding: '8px 13px',
+                    fontSize: 13, fontWeight: 600, cursor: 'pointer',
+                  }}
+                >
+                  {count} {count === 1 ? 'person' : 'people'} →
+                </button>
+              ))}
+            </div>
+
+            <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 20 }}>
+              <button type="button" className="btn btn-ghost" onClick={() => setPromptGate(null)}>
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       {showResultModal && (

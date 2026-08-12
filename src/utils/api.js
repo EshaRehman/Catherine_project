@@ -8,7 +8,17 @@ const BASE_URL = 'http://localhost:8000';
 function extractError(body, fallback) {
   let detail = body?.detail || body?.message || fallback;
   if (Array.isArray(detail)) {
-    return detail.map(e => e.msg || JSON.stringify(e)).join(' · ');
+    /* Name the offending field. Without this a validation failure reads
+       "String should have at least 1 character", which does not tell the
+       operator which box to go and fill in. `loc` is like
+       ["body", "templateImageUrl"] — the last entry is the field. */
+    return detail
+      .map((e) => {
+        const msg = e.msg || JSON.stringify(e);
+        const field = Array.isArray(e.loc) ? e.loc.filter((p) => p !== 'body').join('.') : '';
+        return field ? `${field}: ${msg}` : msg;
+      })
+      .join(' · ');
   }
   if (typeof detail !== 'string') {
     return JSON.stringify(detail);

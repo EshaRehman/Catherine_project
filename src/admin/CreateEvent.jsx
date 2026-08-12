@@ -86,9 +86,18 @@ export function CreateEvent() {
     const ex = dbEvents.find((e) => e.id === eventFormId);
     if (!ex) return;
     setName(ex.name || '');
-    setTemplateIds(ex.templateIds?.length ? [...ex.templateIds] : []);
+    /* Keep only templates that still exist. An event goes on storing a
+       reference to a template after that template is deleted, and resending the
+       dead id made the backend reject the whole save with
+       "Templates not found: <id>" (_validate_templates_exist) — so the event
+       became permanently unsavable, with the error printed at the top of the
+       form where nobody scrolled back to see it. Dropping unknown ids here also
+       means the next save cleans the stale reference out of the event. */
+    const live = new Set(dbTemplates.map((t) => t.id));
+    const stored = ex.templateIds?.length ? ex.templateIds : [];
+    setTemplateIds(stored.filter((id) => live.has(id)));
     setFormError('');
-  }, [eventFormId, dbEvents]);
+  }, [eventFormId, dbEvents, dbTemplates]);
 
   const toggleTpl = (id) => {
     setTemplateIds((prev) =>
@@ -167,12 +176,6 @@ export function CreateEvent() {
         <p className="admin-page-sub" style={{ marginTop: -6 }}>
           Tap cards to include them in the live gallery. Guests only see names and artwork.
         </p>
-        {formError ? (
-          <p className="field-error" role="alert">
-            {formError}
-          </p>
-        ) : null}
-        
         {loadingTemplates ? (
           <p>Loading templates from database...</p>
         ) : (
@@ -194,7 +197,16 @@ export function CreateEvent() {
           </div>
         )}
 
-        <div style={{ display: 'flex', gap: 12, marginTop: 28 }}>
+        {/* Beside the button that triggers it. This used to sit above the
+            template picker, which on a long list is off-screen when Save is
+            pressed — a rejected save looked like a dead button. */}
+        {formError ? (
+          <p className="field-error" role="alert" style={{ marginTop: 20, marginBottom: 0 }}>
+            {formError}
+          </p>
+        ) : null}
+
+        <div style={{ display: 'flex', gap: 12, marginTop: formError ? 12 : 28 }}>
           <button type="submit" className="btn btn-primary" disabled={saving || loadingTemplates}>
             {saving ? 'Saving...' : 'Save event'}
           </button>
