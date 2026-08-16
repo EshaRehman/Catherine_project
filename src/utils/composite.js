@@ -197,7 +197,7 @@ export async function compositePortrait({
   return canvas.toDataURL('image/jpeg', 0.92);
 }
 
-export async function compositeResultPreview(resultDataUrl, template, width = 1080, height = 1320) {
+export async function compositeResultPreview(resultDataUrl, template, width = 1080, height = 1350) {
   const canvas = document.createElement('canvas');
   canvas.width = width;
   canvas.height = height;
@@ -241,7 +241,11 @@ export async function compositeResultPreview(resultDataUrl, template, width = 10
   return canvas.toDataURL('image/jpeg', 0.92);
 }
 
-export async function compositePreviewMock(template, width = 540, height = 960) {
+/* 4:5, matching the booth output. This was 540x960 (9:16): the idle preview
+   was composited at one shape and then shown with object-fit: cover in the
+   4:5 stage, so 30% of its height was cropped away and anything placed near
+   the top or bottom — a logo especially — fell outside the visible area. */
+export async function compositePreviewMock(template, width = 540, height = 675) {
   const canvas = document.createElement('canvas');
   canvas.width = width;
   canvas.height = height;

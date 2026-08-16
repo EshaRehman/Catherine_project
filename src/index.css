@@ -86,6 +86,15 @@
   --accent-rgb: 123, 44, 255;
   --gold: #FFB800;
   --danger: #E5484D;
+  /* The booth's one output shape: 4:5 (1080x1350). The camera captures it, the
+     backend forces every generated image to it (normalize_output_aspect in
+     routes/generate.py), and compositeResultPreview renders onto it. Anything
+     claiming to show the guest's photo must use this, or the admin previews a
+     frame the booth never makes.
+     Drives the editor preview stage. .kiosk-portrait-frame repeats the numbers
+     literally because it also derives its height with calc(), which cannot
+     consume a "1080 / 1350" token — change both together. */
+  --booth-aspect: 1080 / 1350;
   --radius-sm: 10px;
   --radius-md: 16px;
   --radius-lg: 24px;
@@ -160,12 +169,16 @@ select {
   align-items: stretch;
 }
 
-/* Scrollbars — violet/blue theme */
-* {
-  scrollbar-width: thin;
-  scrollbar-color: rgba(123, 44, 255, 0.65) rgba(123, 44, 255, 0.1);
-}
-
+/* Scrollbars — violet/blue theme.
+   Deliberately NOT using the standard `scrollbar-width` / `scrollbar-color`.
+   Setting either makes Chromium render the standard scrollbar and ignore every
+   ::-webkit-scrollbar rule below — so all of this theming was dead, and what
+   showed instead was the platform scrollbar merely tinted by scrollbar-color,
+   complete with Windows stepper arrows at each end that no standard property
+   can remove. Measured: with them set the gutter was 2px (platform), without
+   them it is 11px (the styled bar below).
+   This app only ever runs in Chromium (Electron), so the -webkit- prefixed
+   pseudo-elements are the whole audience. */
 *::-webkit-scrollbar {
   width: 9px;
   height: 9px;
@@ -186,6 +199,23 @@ select {
 *::-webkit-scrollbar-thumb:hover {
   background: linear-gradient(180deg, var(--accent), #5B2CFF);
   background-clip: padding-box;
+}
+
+/* Kill the stepper arrows and the corner square.
+   Styling any ::-webkit-scrollbar part switches Chromium off native scrollbar
+   rendering, and the buttons at each end are then drawn with default styling —
+   little unthemed arrows that sit past the rounded corners of the panel they
+   belong to. Nothing here scrolls by single steps, so they have no purpose.
+   Both dimensions are zeroed as well as display: some Chromium builds still
+   reserve the track space for a button that is only `display: none`. */
+*::-webkit-scrollbar-button {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+*::-webkit-scrollbar-corner {
+  background: transparent;
 }
 
 .admin-sidebar {
@@ -650,7 +680,7 @@ select {
 }
 
 .card-preview {
-  aspect-ratio: 9 / 16;
+  aspect-ratio: var(--booth-aspect);
   position: relative;
   background: #1F1D2E;
   overflow: hidden;
@@ -677,7 +707,7 @@ select {
 
 .tpl-card-visual--kiosk {
   width: 100%;
-  aspect-ratio: 3 / 4;
+  aspect-ratio: var(--booth-aspect);
 }
 
 .tpl-card-visual__media {
@@ -1376,18 +1406,21 @@ select {
 
 /* Gen sub-cards (Base Prompt / Number of People / Generated Prompt) */
 .gen-sub-card {
-  background: #181527;
-  border: 1px solid rgba(123, 44, 255, 0.22);
-  border-radius: 12px;
-  overflow: hidden;
+  /* Flattened: this lives inside .editor-card, so its own background, border
+     and radius were a second frame around content already in a frame — pure
+     bulk. It is now a labelled section, separated by spacing alone. */
+  background: none;
+  border: 0;
+  border-radius: 0;
+  overflow: visible;
 }
 
 .gen-sub-card__header {
   display: flex;
-  align-items: flex-start;
-  gap: 12px;
-  padding: 14px 16px 12px;
-  border-bottom: 1px solid rgba(123, 44, 255, 0.16);
+  align-items: center;
+  gap: 9px;
+  padding: 0 0 8px;
+  border-bottom: 0;
 }
 
 .gen-sub-card__icon {
@@ -1395,9 +1428,9 @@ select {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 34px;
-  height: 34px;
-  border-radius: 8px;
+  width: 24px;
+  height: 24px;
+  border-radius: 6px;
   background: linear-gradient(135deg, #FFB800 0%, var(--accent) 100%);
   color: #fff;
   box-shadow: 0 3px 10px rgba(123, 44, 255, 0.35);
@@ -1419,7 +1452,7 @@ select {
 }
 
 .gen-sub-card__body {
-  padding: 14px 16px;
+  padding: 0;
   display: flex;
   flex-direction: column;
   gap: 8px;
@@ -1475,14 +1508,14 @@ select {
   background: var(--bg-elevated);
   border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 14px;
-  padding: 18px;
+  padding: 14px;
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25);
 }
 
 .editor-card__title {
-  margin: 0 0 16px;
+  margin: 0 0 10px;
   font-family: 'Montserrat', sans-serif;
-  font-size: 1.02rem;
+  font-size: 0.95rem;
   font-weight: 800;
   letter-spacing: -0.01em;
   color: var(--ink);
@@ -1758,7 +1791,7 @@ select {
 .preview-stage {
   width: 100%;
   max-width: 420px;
-  aspect-ratio: 9 / 16;
+  aspect-ratio: var(--booth-aspect);
   border-radius: 28px;
   overflow: hidden;
   box-shadow: var(--shadow-soft);
@@ -1766,12 +1799,20 @@ select {
   background: #111;
 }
 
-/* Template editor: kiosk-matching portrait (must follow .preview-stage so it wins the cascade) */
+/* Template editor: kiosk-matching portrait (must follow .preview-stage so it wins the cascade).
+   This was 9/16 (0.562) while the booth outputs 0.818 — so the editor previewed
+   a taller, narrower frame than the guest ever receives, and text/logo placed
+   against it landed somewhere else in the real photo. */
 .preview-stage.preview-stage--compact {
-  height: min(65dvh, 500px);
-  width: auto;
-  max-width: 100%;
-  aspect-ratio: 9 / 16;
+  /* Width-driven, with height as a cap. A fixed `height` plus the column's
+     max-width clamp left the box over-constrained, so the browser dropped the
+     aspect-ratio and rendered 400x500 (0.800) instead of the booth's 0.818.
+     Letting width lead means the ratio is always honoured and the height cap
+     only limits how large it gets. */
+  width: min(100%, 420px);
+  height: auto;
+  max-height: min(65dvh, 500px);
+  aspect-ratio: var(--booth-aspect);
   border-radius: 20px;
   flex-shrink: 0;
   overflow: hidden;
@@ -1781,28 +1822,73 @@ select {
 }
 
 @media (max-width: 1100px) {
-  /* The editor's `calc(100dvh - 188px)` assumes desktop chrome. In the portrait
-     admin window the chrome is much taller (top bar + nav row + toolbar + page
-     heading), so that height overshoots the space available and, with
-     `overflow: hidden` on the split, the bottom of the form is clipped out of
-     reach — you can see a scrollbar but never get to the end.
+  /* Scroll the FORM, not the page.
+     The page used to be the scroller, which put a single scrollbar down the
+     full height of the window — spanning the preview as well, implying it
+     scrolls when it does not. Confining the scroller to the settings column
+     puts the scrollbar exactly where the scrollable content is, and the preview
+     above it is simply outside the scroll area (no sticky needed).
 
-     Once the split is single-column there is no reason to nest a scroller
-     inside a scroller: let the whole page size to its content and hand the
-     scrolling to .admin-main, which already does it. One scrollbar, nothing
-     unreachable. */
+     The earlier attempt at a nested scroller failed because it sized itself
+     with `calc(100dvh - 188px)`, a guess at the surrounding chrome that
+     overshot in the portrait window and clipped the bottom of the form out of
+     reach. Nothing here hardcodes chrome: the shell flexes down from the real
+     available height, so the form gets exactly what is left. */
+  .admin-main:has(.template-editor-page) {
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    /* Every pixel of gutter here is a pixel the settings do not get. The
+       generous desktop padding cost ~40px of an already tight column, so it is
+       trimmed for this page only — other admin pages keep the roomier default. */
+    padding-top: 12px;
+    padding-bottom: 12px;
+  }
+
+  /* Compact the chrome above the editor. In a narrow admin window the top bar,
+     nav row and this toolbar are a fixed ~140px whatever the window height, so
+     on a short screen they crowd out the preview and the settings both. The
+     toolbar in particular spent 48px framing a single 31px button. */
+  .admin-toolbar {
+    padding: 6px var(--admin-gutter);
+  }
+
+  .admin-page-title {
+    font-size: 1.3rem;
+  }
+
+  /* Child selector, not the bare class: a later `.admin-page-head` media rule
+     sets margin-bottom at the same specificity and would win on source order.
+     This is the third time that trap has bitten in this file. */
+  .template-editor-page > .template-editor-page__head {
+    margin-bottom: 6px;
+  }
+
+  /* The page subtitle explains the editor once and then costs height forever. */
+  .template-editor-page__head .admin-page-sub {
+    display: none;
+  }
+
   .template-editor-page {
+    flex: 1;
     height: auto;
     max-height: none;
+    min-height: 0;
   }
 
   .template-editor-page__split {
     grid-template-columns: 1fr;
-    /* Both rows size to content now that the page itself scrolls. */
-    grid-template-rows: auto auto;
+    /* Share the available height rather than letting the preview size itself.
+       It used to be `auto` with the stage set to a dvh fraction, which ignores
+       the fixed ~200px of chrome above: on a short window the chrome stays put,
+       so a percentage-of-viewport stage collapses to a thumbnail while still
+       taking its share. Splitting the leftover space proportionally means the
+       preview grows on tall windows and both shrink together on short ones. */
+    grid-template-rows: minmax(150px, 1fr) minmax(120px, 1.1fr);
     height: auto;
     max-height: none;
-    overflow: visible;
+    min-height: 0;
+    overflow: hidden;
   }
 
   .editor-scroll {
@@ -1811,16 +1897,102 @@ select {
     overflow: visible;
   }
 
-  .preview-stage-wrap--editor {
-    max-height: none;
+  /* The preview now sits outside the scroll area entirely, so it needs no
+     sticky treatment — it simply never moves. Laid out as a compact bar (stage
+     beside its button) with a divider so it reads as a fixed header for the
+     scrolling settings beneath.
+
+     Compounded selector on purpose: `.preview-stage-wrap.preview-stage-wrap--editor`
+     above sets position at (0,2,0), and a media query adds no specificity, so a
+     single-class rule here would silently lose. */
+  .preview-stage-wrap.preview-stage-wrap--editor {
+    position: static;
+    /* An explicit height makes this a definite-height container, which is what
+       lets the stage's `height: 100%` resolve. As a bare stretched grid item it
+       is not definite, and the percentage silently fell back to auto. */
+    height: 100%;
+    min-height: 0;
+    max-height: 100%;
+    box-sizing: border-box;
     flex-direction: row;
-    flex-wrap: wrap;
+    flex-wrap: nowrap;
     justify-content: center;
-    padding-bottom: 8px;
+    align-items: center;
+    gap: 14px;
+    margin: 0 calc(-1 * var(--admin-gutter));
+    padding: 4px var(--admin-gutter) 10px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
   }
 
+  /* Fill the row the grid hands it, rather than guessing a viewport fraction.
+     Width follows from the ratio and there is plenty of horizontal room — the
+     bar had ~378px going spare — so the stage gets as large as the vertical
+     space genuinely allows. */
   .preview-stage.preview-stage--compact {
-    max-height: min(62dvh, 560px);
+    /* Height from the parent, width from the ratio. Two earlier attempts got
+       this wrong: `height: 100%` against a non-definite parent fell back to
+       auto and overflowed at 420x525, and `align-self: stretch` set the height
+       but let width fill the row, giving a 540x135 letterbox. With the wrap now
+       definite, the percentage resolves and aspect-ratio drives the width. */
+    height: 100%;
+    width: auto;
+    min-height: 0;
+    max-width: 100%;
+    flex: 0 0 auto;
+  }
+
+  /* Keep the button on the same line as the stage. At its default 320px it
+     could not fit beside a ~245px stage, so it wrapped underneath and the
+     pinned bar grew to half the viewport. */
+  .template-editor-page__preview-btn {
+    flex: 0 1 auto;
+    width: auto;
+    max-width: 200px;
+    padding: 10px 14px;
+  }
+
+  /* The hint only restates the button. Worth the space in the desktop column,
+     not in a bar that is competing with the settings for screen height. */
+  .template-editor-page__preview-hint {
+    display: none;
+  }
+}
+
+/* Short-and-wide window: stack side by side instead of top and bottom.
+   Stacking suits the tall portrait admin (566x900), but in a landscape window
+   it is the worst of both — roughly 200px of fixed chrome eats the height, so
+   the preview and the settings each get ~150px, while ~380px of width sits
+   unused beside them. Splitting horizontally gives the preview the column's
+   full height and the settings a full-height scroller next to it.
+   Keyed on aspect ratio rather than a width breakpoint, because it is the shape
+   of the window that decides which way the space should be cut. */
+@media (max-width: 1100px) and (min-aspect-ratio: 1/1) {
+  .template-editor-page__split {
+    grid-template-columns: minmax(0, auto) minmax(0, 1fr);
+    grid-template-rows: minmax(0, 1fr);
+    gap: 14px;
+  }
+
+  .preview-stage-wrap.preview-stage-wrap--editor {
+    flex-direction: column;
+    justify-content: center;
+    gap: 10px;
+    margin: 0;
+    padding: 0;
+    border-bottom: 0;
+  }
+
+  /* Column flex: the main axis is vertical, so `flex` sizes the height
+     properly (unlike the row case, where an auto width simply filled). Centring
+     on the cross axis stops the width stretching, leaving aspect-ratio to
+     derive it from the flex-resolved height. */
+  .preview-stage.preview-stage--compact {
+    flex: 1 1 auto;
+    align-self: center;
+    height: auto;
+    width: auto;
+    min-height: 0;
+    max-width: 100%;
   }
 }
 
@@ -3185,10 +3357,10 @@ select {
 /* Camera → processing → result: portrait 1080×1320, height-constrained, never overflows */
 .kiosk-portrait-frame.kiosk-flow-frame {
   /* Height drives the box; width follows the 1080/1320 ratio */
-  --frame-max-w: min(96vw, calc((100dvh - 120px) * 1080 / 1320));
+  --frame-max-w: min(96vw, calc((100dvh - 120px) * 1080 / 1350));
   width: var(--frame-max-w);
-  height: calc(var(--frame-max-w) * 1320 / 1080);
-  aspect-ratio: 1080 / 1320;
+  height: calc(var(--frame-max-w) * 1350 / 1080);
+  aspect-ratio: 1080 / 1350;
   max-height: calc(100dvh - 120px);
   max-width: 96vw;
   box-sizing: border-box;
@@ -3665,7 +3837,7 @@ select {
    lowered frame still fits the screen (same app width/ratio, just shorter to
    leave room for the button straddling its top edge). */
 .camera-screen__viewport .kiosk-flow-frame {
-  --frame-max-w: min(96vw, calc((100dvh - 120px - var(--cap-band, 0px)) * 1080 / 1320));
+  --frame-max-w: min(96vw, calc((100dvh - 120px - var(--cap-band, 0px)) * 1080 / 1350));
   max-height: calc(100dvh - 120px - var(--cap-band, 0px));
 }
 
@@ -3824,7 +3996,7 @@ select {
    SAME --flow-frame-reserve as the camera screen so both frames come out
    pixel-identical in size, not just individually non-overflowing. */
 .result-screen__viewport .kiosk-flow-frame {
-  --frame-max-w: min(96vw, calc((100dvh - 120px - var(--flow-frame-reserve)) * 1080 / 1320));
+  --frame-max-w: min(96vw, calc((100dvh - 120px - var(--flow-frame-reserve)) * 1080 / 1350));
   max-height: calc(100dvh - 120px - var(--flow-frame-reserve));
 }
 
@@ -4686,7 +4858,7 @@ select {
   }
 
   .admin-toolbar {
-    padding: 8px var(--admin-gutter);
+    padding: 6px var(--admin-gutter);
   }
 
   .admin-main {
@@ -4701,7 +4873,7 @@ select {
   }
 
   .admin-page-title {
-    font-size: 1.5rem;
+    font-size: 1.3rem;
   }
 
   /* Event cards are text-dense — one full-width column reads better than two
@@ -4726,6 +4898,6 @@ select {
   }
 
   .admin-page-title {
-    font-size: 1.45rem;
+    font-size: 1.25rem;
   }
 }

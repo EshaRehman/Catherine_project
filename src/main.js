@@ -672,7 +672,7 @@ body{background:#ede8df;color:#1a1a1a;font-family:-apple-system,BlinkMacSystemFo
   overflow:hidden;
   cursor:pointer;
   background:#e8e2da;
-  aspect-ratio:1080/1320;
+  aspect-ratio:1080/1350;
   transition:transform .2s,box-shadow .2s;
   box-shadow:
     0 0 0 3px rgba(245,166,35,.18),

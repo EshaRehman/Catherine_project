@@ -134,7 +134,12 @@ export async function previewImageApi(imageBase64, prompt, seed, mode) {
   try {
     const res = await bridge.previewImage(imageBase64, prompt, seed ?? null, mode || 'local');
     if (res.status < 200 || res.status >= 300) {
-      return { ok: false, error: res.body?.detail || `HTTP ${res.status}` };
+      /* extractError, not the raw detail. A 422 from FastAPI puts an ARRAY of
+         {type, loc, msg, input} objects in `detail`; returning it unflattened
+         meant React was handed objects to render and the whole admin window
+         died with "Objects are not valid as a React child". Every other call
+         already flattens — this one was the exception. */
+      return { ok: false, error: extractError(res.body, `Server error ${res.status}`) };
     }
     return { ok: true, data: res.body };
   } catch (err) {

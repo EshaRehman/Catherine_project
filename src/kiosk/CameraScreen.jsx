@@ -21,8 +21,8 @@ export function CameraScreen({ onCapture, onBack }) {
           video: {
             facingMode: 'user',
             width: { ideal: 1080 },
-            height: { ideal: 1320 },
-            aspectRatio: { ideal: 1080 / 1320 },
+            height: { ideal: 1350 },
+            aspectRatio: { ideal: 1080 / 1350 },
           },
           audio: false,
         });
@@ -89,9 +89,9 @@ export function CameraScreen({ onCapture, onBack }) {
     const vw = video.videoWidth;
     const vh = video.videoHeight;
 
-    // Output matches model input exactly — 1080×1320 portrait
+    // Output matches the booth's 4:5 output exactly — 1080×1350 portrait
     const outW = 1080;
-    const outH = 1320;
+    const outH = 1350;
 
     // Scale to cover the output frame, center-crop any excess
     const scale = Math.max(outW / vw, outH / vh);

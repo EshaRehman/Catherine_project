@@ -85,7 +85,7 @@ export function ProcessingScreen({ subjectDataUrl, template, eventId, onDone, on
 
         let finalUrl = rawUrl;
         try {
-          finalUrl = await compositeResultPreview(rawUrl, template, 1080, 1320);
+          finalUrl = await compositeResultPreview(rawUrl, template, 1080, 1350);
         } catch {
           finalUrl = rawUrl;
         }

@@ -184,10 +184,10 @@ const defaultPeoplePrompts = () => ({ 1: '', 2: '', 3: '', 4: '' });
  * background is only ever a card/backdrop image — nothing about generation
  * depends on it. Rather than refuse the save, stand in a titled panel so a
  * template can be created from its prompts alone and a real image dropped in
- * later. Drawn at the booth's 1080x1320 capture aspect.
+ * later. Drawn at the booth's 1080x1350 (4:5) output size.
  */
 function makeNamePlaceholderBackground(name) {
-  const W = 1080, H = 1320;
+  const W = 1080, H = 1350;
   const canvas = document.createElement('canvas');
   canvas.width = W;
   canvas.height = H;
@@ -259,12 +259,16 @@ const SCENE_VAR_FIELDS = [
      missing — token used, no options: substitute_scene_vars leaves the token in
                the prompt, so the AI is literally sent "{pose}"
      unused  — options present, no prompt references the token: dead data
-     idle    — neither: nothing to say */
+     idle    — neither: nothing to say
+
+   Only the two actionable states print a line. "ok" and "idle" used to print
+   one too, which put a row of explanatory text under all five variables and
+   made the section twice as tall for information nobody needs to act on. */
 const VAR_STATUS = {
-  ok:      { color: '#5cd6a0', text: (t) => `Used by your prompt — one option replaces ${t} at generation time.` },
-  missing: { color: '#ff8f6b', text: (t) => `Your prompt uses ${t} but there are no options, so the AI is sent the literal text ${t}. Add at least one option.` },
-  unused:  { color: '#e0b356', text: (t) => `No prompt references ${t}, so these options are never used.` },
-  idle:    { color: null,      text: () => 'Not used by this template.' },
+  ok:      null,
+  idle:    null,
+  missing: { color: '#ff8f6b', text: (t) => `Prompt uses ${t} but has no options — the AI receives the literal ${t}.` },
+  unused:  { color: '#e0b356', text: (t) => `No prompt uses ${t} — these are never applied.` },
 };
 
 function TagInput({ label, token, placeholder, items, onChange, status = 'idle' }) {
@@ -321,9 +325,11 @@ function TagInput({ label, token, placeholder, items, onChange, status = 'idle' 
           ))}
         </div>
       )}
-      <p className="field-help" style={VAR_STATUS[status].color ? { color: VAR_STATUS[status].color } : undefined}>
-        {VAR_STATUS[status].text(token)}
-      </p>
+      {VAR_STATUS[status] ? (
+        <p className="field-help" style={{ color: VAR_STATUS[status].color }}>
+          {VAR_STATUS[status].text(token)}
+        </p>
+      ) : null}
     </div>
   );
 }
@@ -462,17 +468,68 @@ export function TemplateEditor() {
       r.readAsDataURL(file);
     });
 
+  /**
+   * Shrink an uploaded image before it goes anywhere near the draft.
+   *
+   * Backgrounds and logos are stored as base64 data URLs inside the template
+   * document, and base64 adds about a third on top of the file size. MongoDB
+   * caps a document at 16MB, so a single phone photo could push the whole
+   * template past the limit — the save then died with
+   * `DocumentTooLarge: BSON document too large (19367769 bytes)`, surfaced to
+   * the operator as a bare "Server error 500".
+   *
+   * Nothing needs the full resolution: the background is only ever displayed at
+   * the booth's 1080x1350, so anything larger is bytes with no visible benefit.
+   */
+  const downscaleImage = (file, { maxW, maxH, mime, quality }) =>
+    new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onerror = reject;
+      reader.onload = () => {
+        const img = new Image();
+        img.onerror = reject;
+        img.onload = () => {
+          const scale = Math.min(1, maxW / img.width, maxH / img.height);
+          /* Pass the original straight through whenever it already fits. Only a
+             file big enough to threaten the 16MB document limit is re-encoded,
+             so ordinary uploads keep their exact original bytes and quality. */
+          if (scale >= 1 && String(reader.result).length < 6_000_000) {
+            resolve(reader.result);
+            return;
+          }
+          const w = Math.max(1, Math.round(img.width * scale));
+          const h = Math.max(1, Math.round(img.height * scale));
+          const canvas = document.createElement('canvas');
+          canvas.width = w;
+          canvas.height = h;
+          const ctx = canvas.getContext('2d');
+          ctx.drawImage(img, 0, 0, w, h);
+          resolve(canvas.toDataURL(mime, quality));
+        };
+        img.src = reader.result;
+      };
+      reader.readAsDataURL(file);
+    });
+
   const onBgFile = async (e) => {
     const f = e.target.files?.[0];
     if (!f) return;
-    const url = await readFileDataUrl(f);
+    /* Generous ceiling, near-lossless encoding. Only images far larger than
+       anything the booth can display are touched at all — 2160x2700 is already
+       double the output resolution, so a resized background still carries more
+       detail than the frame can show. Existing 3MB backgrounds pass through
+       untouched; only a photo big enough to breach the 16MB document limit is
+       reduced, and then only as far as it must be. */
+    const url = await downscaleImage(f, { maxW: 2160, maxH: 2700, mime: 'image/jpeg', quality: 0.95 });
     setDraft((d) => ({ ...d, backgroundUrl: url }));
   };
 
   const onLogoFile = async (e) => {
     const f = e.target.files?.[0];
     if (!f) return;
-    const url = await readFileDataUrl(f);
+    // PNG: logos are routinely transparent and JPEG would fill that with black.
+    // 1024px is well beyond the ~45% of frame width a logo can occupy.
+    const url = await downscaleImage(f, { maxW: 1024, maxH: 1024, mime: 'image/png' });
     setDraft((d) => ({ ...d, logoUrl: url }));
   };
 
@@ -509,7 +566,7 @@ export function TemplateEditor() {
       return;
     }
     let cancelled = false;
-    compositePreviewMock(draft, 540, 960).then(url => {
+    compositePreviewMock(draft, 540, 675).then(url => {
       if (!cancelled) setIdlePreviewUrl(url);
     }).catch(() => {});
     return () => { cancelled = true; };
@@ -523,7 +580,7 @@ export function TemplateEditor() {
     (async () => {
       try {
         const stream = await navigator.mediaDevices.getUserMedia({
-          video: { facingMode: 'user', width: { ideal: 1080 }, height: { ideal: 1320 } },
+          video: { facingMode: 'user', width: { ideal: 1080 }, height: { ideal: 1350 } },
           audio: false,
         });
         if (cancelled) { stream.getTracks().forEach(t => t.stop()); return; }
@@ -550,7 +607,7 @@ export function TemplateEditor() {
   const snap = useCallback(() => {
     const video = camVideoRef.current;
     if (!video || !video.videoWidth) return;
-    const outW = 1080, outH = 1320;
+    const outW = 1080, outH = 1350;
     const canvas = document.createElement('canvas');
     canvas.width = outW; canvas.height = outH;
     const ctx = canvas.getContext('2d', { alpha: false });
@@ -769,6 +826,21 @@ export function TemplateEditor() {
       },
     };
 
+    /* MongoDB rejects any document over 16MB, and the failure arrives as an
+       unexplained 500. Catch it here where the offending fields are known, so
+       the operator is told which image to replace instead of guessing. */
+    const payloadBytes = JSON.stringify(payload).length;
+    if (payloadBytes > 15_000_000) {
+      const bgMb = ((payload.templateImageUrl || '').length / 1_048_576).toFixed(1);
+      const logoMb = ((payload.logoUrl || '').length / 1_048_576).toFixed(1);
+      setSaveStatus('error');
+      setSaveError(
+        `This template is ${(payloadBytes / 1_048_576).toFixed(1)}MB, over the 16MB database limit `
+        + `(background ${bgMb}MB, logo ${logoMb}MB). Use a smaller image.`,
+      );
+      return;
+    }
+
     let result;
     // Check if it's an update vs create
     // If not saving as new and we have an editorTemplateId that is not an object (meaning it's from DB)
@@ -914,8 +986,17 @@ export function TemplateEditor() {
                         left: `${draft.logoX}%`,
                         top: `${draft.logoY}%`,
                         transform: 'translate(-50%, -50%)',
-                        width: `${(draft.logoScale || 0.2) * 100}%`,
-                        height: 'auto',
+                        /* Height-driven, matching the composite exactly. Both
+                           composite functions set the logo's HEIGHT to
+                           min(canvasW, canvasH) * logoScale — which is the
+                           canvas width on a portrait frame — and let the width
+                           follow the image's own ratio. This overlay used to
+                           set the WIDTH to that same fraction instead, so any
+                           non-square logo was dragged at one size and rendered
+                           at another. stageScale is stageWidth / 1080, so this
+                           is the composite's figure in screen pixels. */
+                        height: `${(draft.logoScale || 0.2) * 1080 * stageScale}px`,
+                        width: 'auto',
                         cursor: 'grab',
                         userSelect: 'none',
                         pointerEvents: 'all',
@@ -951,7 +1032,13 @@ export function TemplateEditor() {
 
               {previewPhase === 'result' && !rawResultDataUrl && previewError && (
                 <div style={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 8, padding: '0 20px', background: '#111' }}>
-                  <span style={{ color: '#f87171', fontSize: 13, textAlign: 'center', lineHeight: 1.5 }}>⚠️ {previewError}</span>
+                  {/* Coerced to a string on purpose. React throws
+                      "Objects are not valid as a React child" and tears down
+                      the whole admin window if it is ever handed an object —
+                      which is exactly what a raw FastAPI 422 detail is. */}
+                  <span style={{ color: '#f87171', fontSize: 13, textAlign: 'center', lineHeight: 1.5 }}>
+                    ⚠️ {typeof previewError === 'string' ? previewError : JSON.stringify(previewError)}
+                  </span>
                 </div>
               )}
             </div>
@@ -987,7 +1074,21 @@ export function TemplateEditor() {
               <button
                 type="button"
                 className="btn btn-primary template-editor-page__preview-btn"
-                onClick={() => setPreviewPhase('camera')}
+                onClick={() => {
+                  /* Check before opening the camera, not after. There is no
+                     point posing for a test shot that cannot be generated, and
+                     an empty prompt otherwise reached the API and came back as
+                     a validation error. */
+                  const label = PEOPLE_OPTIONS.find((o) => o.value === numberOfPeople)?.label.toLowerCase();
+                  if (!(peoplePrompts[numberOfPeople] || '').trim()) {
+                    setPreviewError(`Write the ${label} prompt before generating a preview.`);
+                    setRawResultDataUrl(null);
+                    setPreviewPhase('result');
+                    return;
+                  }
+                  setPreviewError(null);
+                  setPreviewPhase('camera');
+                }}
                 disabled={previewPhase === 'processing'}
               >
                 {previewPhase === 'processing' ? 'Processing…' : 'Preview generate'}
@@ -1107,9 +1208,20 @@ export function TemplateEditor() {
             </div>
 
             {/* Pre-save check. Only rendered when something is actually wrong,
-                so a correctly built template shows no clutter. */}
+                so a correctly built template shows no clutter. It keeps its own
+                frame: .gen-sub-card is otherwise flattened to a plain section,
+                and a warning that looks like every other section stops reading
+                as a warning. */}
             {(promptCheck.emptyCounts.length > 0 || promptCheck.tokensMissingOptions.length > 0) && (
-              <div className="gen-sub-card" style={{ borderColor: 'rgba(255,143,107,0.35)' }}>
+              <div
+                className="gen-sub-card"
+                style={{
+                  border: '1px solid rgba(255,143,107,0.35)',
+                  background: 'rgba(255,143,107,0.06)',
+                  borderRadius: 10,
+                  padding: '12px 14px',
+                }}
+              >
                 <div className="gen-sub-card__header">
                   <span className="gen-sub-card__icon" aria-hidden>
                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
