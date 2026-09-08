@@ -1492,6 +1492,12 @@ export function TemplateEditor() {
 
       {showResultModal && (
         <div
+          /* Marks this as an overlay that owns the Escape key, so the kiosk's
+             quit prompt stays out of the way while it is up (see
+             BLOCKING_OVERLAY_SELECTOR in components/ExitConfirmModal.jsx). */
+          role="dialog"
+          aria-modal="true"
+          aria-label="Generated result"
           onClick={() => setShowResultModal(false)}
           style={{
             position: 'fixed', inset: 0, zIndex: 9999,

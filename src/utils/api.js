@@ -128,6 +128,18 @@ export async function generateImage(imageBase64, templateId, eventId, seed) {
   }
 }
 
+/**
+ * Hand the branded composite back to the server so the copy behind the QR code
+ * matches what the guest just saw.
+ *
+ * /generate can only upload the bare AI output — the template's logo and
+ * caption are painted on here in the renderer, after that response lands. This
+ * replaces the Cloudinary asset and the event-folder file in place.
+ */
+export async function finalizeImage({ eventId, eventCount, imageBase64 }) {
+  return apiRequest('POST', '/finalize-image', { eventId, eventCount, imageBase64 });
+}
+
 export async function previewImageApi(imageBase64, prompt, seed, mode) {
   const bridge = window?.catherine?.api;
   if (!bridge) return { ok: false, error: 'API bridge not available.' };

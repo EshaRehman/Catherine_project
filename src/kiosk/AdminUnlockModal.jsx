@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useApp } from '../state/AppContext.jsx';
 
 const MODE_OPTIONS = [
@@ -11,6 +11,22 @@ export function AdminUnlockModal({ open, onClose }) {
   const [step, setStep] = useState('password'); // 'password' | 'mode'
   const [value, setValue] = useState('');
   const [error, setError] = useState(false);
+
+  /* Escape closes this the way it closes every other dialog in the app. Without
+     it, Escape here would do nothing at all: the kiosk's quit prompt stands
+     down while any modal is open, so the key would appear dead. */
+  useEffect(() => {
+    if (!open) return undefined;
+    const onKey = (e) => {
+      if (e.key !== 'Escape') return;
+      setStep('password');
+      setValue('');
+      setError(false);
+      onClose();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [open, onClose]);
 
   if (!open) return null;
 

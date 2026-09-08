@@ -1,10 +1,28 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { generateImage } from '../utils/api.js';
+import { finalizeImage, generateImage } from '../utils/api.js';
 import { compositeResultPreview } from '../utils/composite.js';
 import processingVideoUrl from './processingVideoMedia.js';
 
 /** Must match the longest transition on .kiosk-portrait-frame__reveal in index.css. */
 const REVEAL_MS = 1400;
+
+/* Cap on how long the guest waits for the branded re-upload. It runs alongside
+   the reveal animation, so in practice it has a 1.4s head start and adds
+   nothing; this only bites when the venue's uplink is struggling, and then a
+   slightly-wrong download beats a booth that appears to have frozen. */
+const FINALIZE_TIMEOUT_MS = 10_000;
+
+/** Does this template actually paint anything over the AI output? */
+const templateHasOverlay = (template) =>
+  Boolean(
+    (template?.overlayText && String(template.overlayText).trim()) || template?.logoUrl,
+  );
+
+const withTimeout = (promise, ms) =>
+  Promise.race([
+    promise,
+    new Promise((resolve) => setTimeout(() => resolve({ ok: false, error: 'timeout' }), ms)),
+  ]);
 
 /**
  * Recognises the one generate failure that is the guest's to fix: YOLO found
@@ -22,6 +40,19 @@ const isNoPersonError = (error) =>
 export function ProcessingScreen({ subjectDataUrl, template, eventId, onDone, onNoPerson }) {
   const videoRef = useRef(null);
   const timerRef = useRef(null);
+
+  /* Held in refs, and deliberately kept out of the effect's dependency list.
+     The parent passes these as inline arrows, so every parent re-render gives
+     them fresh identities; with them in the deps, any such re-render tore down
+     the in-flight request and started a *second* generation — a wasted minute
+     of GPU time, and the first result silently discarded. The generation must
+     be tied to the capture it is for, nothing else. */
+  const onDoneRef = useRef(onDone);
+  const onNoPersonRef = useRef(onNoPerson);
+  useEffect(() => {
+    onDoneRef.current = onDone;
+    onNoPersonRef.current = onNoPerson;
+  }, [onDone, onNoPerson]);
 
   // The finished picture is shown here first and cross-dissolved over the
   // animation; only once that has played do we hand off to ResultScreen, which
@@ -44,8 +75,14 @@ export function ProcessingScreen({ subjectDataUrl, template, eventId, onDone, on
     // templateId is stored on the template object — use templateId (DB key) or id
     const templateId = template?.templateId || template?.id;
 
-    /** Cross-dissolve to `url`, then hand off. */
-    const reveal = async (url, cloudinaryUrl) => {
+    /**
+     * Cross-dissolve to `url`, then hand off.
+     *
+     * `pendingDownload` is the branded re-upload, still in flight. It is
+     * resolved at the end of the reveal rather than before it so the upload
+     * overlaps the animation the guest is already watching.
+     */
+    const reveal = async (url, pendingDownload, fallbackUrl) => {
       // Decode before showing it: painting an undecoded image mid-transition
       // stutters the fade, and on a slow decode the frame flashes empty.
       try {
@@ -66,10 +103,28 @@ export function ProcessingScreen({ subjectDataUrl, template, eventId, onDone, on
         });
       });
 
-      timerRef.current = setTimeout(() => {
+      timerRef.current = setTimeout(async () => {
         if (!alive) return;
         if (video) { video.loop = false; video.pause(); }
-        onDone(url, cloudinaryUrl);
+
+        let downloadUrl = fallbackUrl;
+        if (pendingDownload) {
+          const res = await withTimeout(pendingDownload, FINALIZE_TIMEOUT_MS);
+          if (res?.ok && res.data?.cloudinary_url) {
+            downloadUrl = res.data.cloudinary_url;
+          } else {
+            /* Loud on purpose. The guest still gets a scannable code, but it
+               points at the un-branded original — the operator needs to see
+               this in the log rather than discover it from a customer. */
+            console.error(
+              '[ProcessingScreen] branded upload failed; QR will serve the un-branded image:',
+              res?.error,
+            );
+          }
+        }
+
+        if (!alive) return;
+        onDoneRef.current(url, downloadUrl);
       }, REVEAL_MS);
     };
 
@@ -84,26 +139,44 @@ export function ProcessingScreen({ subjectDataUrl, template, eventId, onDone, on
           : `data:image/png;base64,${base64}`;
 
         let finalUrl = rawUrl;
+        let composited = false;
         try {
           finalUrl = await compositeResultPreview(rawUrl, template, 1080, 1350);
+          composited = true;
         } catch {
           finalUrl = rawUrl;
         }
         if (!alive) return;
 
-        await reveal(finalUrl, result.data.cloudinary_url || null);
+        /* The server uploaded the bare AI output; the logo and caption were
+           only just painted on, here. Send the composite back so the URL in
+           the QR code resolves to the picture the guest is looking at. Skipped
+           when the template has no overlay, since the two would be identical
+           and the upload would be pure latency. */
+        const eventCount = result.data.event_count;
+        const needsBranding =
+          composited && templateHasOverlay(template) && Boolean(eventId) && eventCount > 0;
+
+        const pendingDownload = needsBranding
+          ? finalizeImage({ eventId, eventCount, imageBase64: finalUrl }).catch((err) => ({
+              ok: false,
+              error: err?.message || 'finalize failed',
+            }))
+          : null;
+
+        await reveal(finalUrl, pendingDownload, result.data.cloudinary_url || null);
       } else {
         console.error('[ProcessingScreen] generate failed:', result.error);
         if (video) { video.loop = false; video.pause(); }
 
-        if (isNoPersonError(result.error) && onNoPerson) {
+        if (isNoPersonError(result.error) && onNoPersonRef.current) {
           // Nothing was generated, so there is no picture to reveal. Handing
           // subjectDataUrl to onDone here is what made the kiosk present the
           // guest's own untouched photo as the finished result.
-          onNoPerson();
+          onNoPersonRef.current();
           return;
         }
-        onDone(subjectDataUrl, null);
+        onDoneRef.current(subjectDataUrl, null);
       }
     };
 
@@ -113,7 +186,8 @@ export function ProcessingScreen({ subjectDataUrl, template, eventId, onDone, on
       alive = false;
       if (timerRef.current) clearTimeout(timerRef.current);
     };
-  }, [subjectDataUrl, template, onDone, onNoPerson]);
+    /* onDone/onNoPerson intentionally absent - see the refs above. */
+  }, [subjectDataUrl, template, eventId]);
 
   return (
     <div className="camera-screen camera-screen--processing">

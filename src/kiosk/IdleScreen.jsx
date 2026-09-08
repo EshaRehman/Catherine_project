@@ -2,7 +2,7 @@ import React, { useRef, useEffect } from 'react';
 import idleHeroVideo from './idleHeroMedia.js';
 import logo from '../assets/logo.png';
 
-export function IdleScreen({ onStart, disabled }) {
+export function IdleScreen({ onStart, disabled, connecting = false }) {
   const videoRef = useRef(null);
 
   useEffect(() => {
@@ -27,13 +27,24 @@ export function IdleScreen({ onStart, disabled }) {
       />
       <div className="kiosk-idle__top">
         <img className="kiosk-idle__logo" src={logo} alt="AI Photo Booth Co" />
-        {disabled ? (
+        {connecting ? (
+          /* The booth is waiting on its own backend, which takes a few seconds
+             to come up after a launch. Nothing for the operator to do — saying
+             "go and configure admin" here would be wrong and is what made a
+             cold start look like the live event had been lost. */
+          <p className="kiosk-idle__hint">Getting ready…</p>
+        ) : disabled ? (
           <p className="kiosk-idle__hint">
             In admin, add templates to an event and set that event as active — then return with{' '}
             <strong>Live experience</strong>.
           </p>
         ) : null}
-        <button type="button" className="kiosk-tap kiosk-tap--idle-top" onClick={onStart} disabled={disabled}>
+        <button
+          type="button"
+          className="kiosk-tap kiosk-tap--idle-top"
+          onClick={onStart}
+          disabled={disabled || connecting}
+        >
           <span className="kiosk-tap__shine" aria-hidden />
           Tap to start
         </button>

@@ -4901,3 +4901,119 @@ select {
     font-size: 1.25rem;
   }
 }
+
+/* ================================================================
+   KIOSK FULLSCREEN
+   The window is borderless and covers the whole portrait screen, so
+   there is no title bar, menu bar or taskbar to absorb stray input.
+   These rules make the page behave like an appliance rather than a
+   web page inside it.
+   ================================================================ */
+
+/* Guests drag, swipe and rest fingers on the glass. Without these, a drag
+   across the "Tap to start" headline paints a blue text selection, a swipe
+   rubber-bands the whole page away from the top edge, and a long-press on the
+   idle video offers to save it. */
+.shell-kiosk {
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+  overscroll-behavior: none;
+  /* Removes the 300ms double-tap-to-zoom delay, so buttons feel immediate. */
+  touch-action: manipulation;
+}
+
+.shell-kiosk img,
+.shell-kiosk video {
+  -webkit-user-drag: none;
+  user-drag: none;
+}
+
+/* The admin password prompt and the exit dialog live inside .shell-kiosk, so
+   the blanket user-select: none above would reach their fields — leaving the
+   operator unable to select or correct a mistyped password. */
+.shell-kiosk input,
+.shell-kiosk textarea,
+.shell-kiosk [contenteditable] {
+  user-select: text;
+  -webkit-user-select: text;
+}
+
+/* The idle hero and the flow frames are sized off the viewport, so a scrollbar
+   appearing for one overflowing pixel would resize everything under it. There
+   is nothing to scroll to in the kiosk flow — every screen is one viewport. */
+html:has(.shell-kiosk),
+body:has(.shell-kiosk) {
+  overflow: hidden;
+  overscroll-behavior: none;
+}
+
+/* Nothing in the booth is reachable by keyboard, and a lingering focus ring on
+   a touch-activated button reads as a stuck state to guests. Focus-visible is
+   left alone so the exit prompt below is still operable from the keyboard. */
+.shell-kiosk button:focus:not(:focus-visible) {
+  outline: none;
+}
+
+/* The kiosk art direction is portrait (685 x 1214, matching the booth screen).
+   On a portrait display it fills edge to edge and this rule never applies.
+   It exists for the case where the app is opened on a landscape monitor —
+   a spare laptop, a test bench, an operator's desk — where stretching the
+   layout sideways would push the mascot out of the idle video's crop and
+   strand the flow frames in a sea of empty background. Letterboxing keeps the
+   composition exactly as designed. */
+@media (min-aspect-ratio: 3 / 4) {
+  body:has(.shell-kiosk) {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: #000;
+  }
+
+  body:has(.shell-kiosk) > #root {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100vw;
+    height: 100vh;
+    min-height: 0;
+  }
+
+  .shell-kiosk {
+    width: auto;
+    height: 100vh;
+    min-height: 0;
+    aspect-ratio: 685 / 1214;
+  }
+}
+
+/* --- Exit prompt (Esc) --- */
+
+/* Sits above the admin unlock modal and every kiosk overlay: whatever is on
+   screen, this is the layer that answers Escape. */
+.modal-backdrop--exit {
+  z-index: 30000;
+  background: rgba(8, 5, 20, 0.72);
+}
+
+.modal--exit {
+  max-width: 440px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  text-align: left;
+}
+
+/* Operator-facing, and the operator may be reaching past a guest to a screen at
+   arm's length — bigger hit targets than the admin modals use. */
+.modal--exit .modal-actions .btn {
+  flex: 1;
+  padding: 14px 18px;
+  font-size: 1rem;
+}
+
+.modal-hint {
+  margin: 14px 0 0;
+  font-size: 0.78rem;
+  color: var(--ink-muted);
+  opacity: 0.72;
+  text-align: center;
+}

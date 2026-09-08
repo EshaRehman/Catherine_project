@@ -1,4 +1,13 @@
-const { app, BrowserWindow, ipcMain, dialog, shell, screen } = require('electron');
+const {
+  app,
+  BrowserWindow,
+  ipcMain,
+  dialog,
+  shell,
+  screen,
+  Menu,
+  powerSaveBlocker,
+} = require('electron');
 const fs = require('node:fs');
 const fsp = require('node:fs/promises');
 const path = require('node:path');
@@ -11,6 +20,39 @@ const { registerGmailIpc, trySendJobZipViaGmail } = require('./gmail-oauth-main'
 if (require('electron-squirrel-startup')) {
   app.quit();
 }
+
+// ================================================================
+//   KIOSK MODE
+//   The booth runs unattended on a portrait screen for a whole
+//   event, so the default is borderless fullscreen with no Windows
+//   chrome of any kind: no title bar, no menu bar, no taskbar.
+//
+//   Pass --windowed (or set CATHERINE_WINDOWED=1) to get the old
+//   685x1214 resizable window back for development.
+// ================================================================
+const WINDOWED = process.argv.includes('--windowed') || process.env.CATHERINE_WINDOWED === '1';
+const KIOSK = !WINDOWED;
+
+/* One booth, one process. A watchdog relaunch that races the dying instance —
+   or an operator double-clicking the shortcut — would otherwise put a second
+   copy on screen fighting for the camera and for ports 8000/8188. The second
+   copy exits immediately and hands focus back to the one already running. */
+const gotSingleInstanceLock = app.requestSingleInstanceLock();
+if (!gotSingleInstanceLock) {
+  app.quit();
+}
+
+/* Chromium throttles timers and rAF in backgrounded windows. Kiosk windows do
+   get backgrounded (a Windows notification stealing focus is enough), and a
+   throttled idle screen means the hero video stutters and the corner long-press
+   timer drifts. */
+app.commandLine.appendSwitch('disable-renderer-backgrounding');
+app.commandLine.appendSwitch('disable-background-timer-throttling');
+app.commandLine.appendSwitch('disable-backgrounding-occluded-windows');
+
+// The app never uses a menu; removing it also removes every accelerator that
+// came with it (Ctrl+W close, Ctrl+R reload, Ctrl+Shift+I devtools, F11...).
+Menu.setApplicationMenu(null);
 
 // ================================================================
 //   BACKEND PROCESS MANAGEMENT
@@ -47,52 +89,232 @@ function resolveComfyPython() {
   return fallback;
 }
 
-let fastapiProcess = null;
-let comfyuiProcess = null;
+/* Set once the app is genuinely on its way out, so the supervisor below stops
+   treating a backend exit as a crash worth restarting. */
+let shuttingDown = false;
 
-function startBackends() {
-  // --- FastAPI (port 8000) ---
-  const backendPython = `${APP_DIR}\\venv\\Scripts\\python.exe`;
-  if (!fs.existsSync(backendPython)) {
-    console.error('[FastAPI] Python not found at:', backendPython);
+/* child.kill() on Windows terminates only the process we spawned. Both backends
+   are Python launchers that go on to spawn their own children (uvicorn's reload
+   worker, ComfyUI's model loaders), and those survive — holding ports 8000 and
+   8188 open. The next launch then finds the ports taken and the booth comes up
+   with no backend at all, which is exactly the failure an auto-relaunch is
+   supposed to prevent. taskkill /T kills the whole tree. */
+function killTree(child, label) {
+  if (!child || child.killed || child.exitCode !== null) return;
+  const pid = child.pid;
+  if (!pid) return;
+  if (process.platform === 'win32') {
+    try {
+      spawn('taskkill', ['/PID', String(pid), '/T', '/F'], { windowsHide: true, detached: false });
+    } catch (err) {
+      console.error(`[${label}] taskkill failed:`, err?.message);
+      try { child.kill(); } catch { /* already gone */ }
+    }
   } else {
-    console.log('[Backend] Starting FastAPI from:', FASTAPI_DIR);
-    fastapiProcess = spawn(
-      backendPython,
-      ['-m', 'uvicorn', 'main:app', '--host', '127.0.0.1', '--port', '8000'],
-      { cwd: FASTAPI_DIR, windowsHide: true, detached: false }
-    );
-    fastapiProcess.stdout.on('data', d => console.log('[FastAPI]', d.toString().trim()));
-    fastapiProcess.stderr.on('data', d => console.log('[FastAPI]', d.toString().trim()));
-    fastapiProcess.on('exit', code => console.log(`[FastAPI] exited with code ${code}`));
+    try { child.kill('SIGTERM'); } catch { /* already gone */ }
   }
+}
 
-  // --- ComfyUI (port 8188) ---
-  const comfyPython = resolveComfyPython();
-  if (!fs.existsSync(comfyPython)) {
-    console.error('[ComfyUI] Python not found. Run the setup script to create the venv.');
-  } else {
-    console.log('[Backend] Starting ComfyUI from:', COMFYUI_DIR);
-    comfyuiProcess = spawn(
-      comfyPython,
-      ['main.py', '--listen', '127.0.0.1', '--port', '8188'],
-      { cwd: COMFYUI_DIR, windowsHide: true, detached: false }
+/**
+ * Spawn a backend and keep it alive for the length of the event.
+ *
+ * An 8-hour run has to survive a backend falling over — an out-of-memory
+ * ComfyUI, a Python traceback that kills uvicorn — without an operator noticing
+ * and restarting anything. Restarts back off from 2s to 30s so a backend that
+ * cannot start (missing model, occupied port) does not spin the CPU retrying
+ * hundreds of times a minute.
+ */
+function superviseBackend({ label, command, args, cwd }) {
+  const state = { child: null, attempts: 0, timer: null };
+
+  const launch = () => {
+    state.timer = null;
+    if (shuttingDown) return;
+
+    console.log(`[${label}] Starting from: ${cwd}`);
+    let child;
+    try {
+      child = spawn(command, args, { cwd, windowsHide: true, detached: false });
+    } catch (err) {
+      console.error(`[${label}] spawn failed:`, err?.message);
+      scheduleRestart();
+      return;
+    }
+    state.child = child;
+
+    child.stdout.on('data', (d) => console.log(`[${label}]`, d.toString().trim()));
+    child.stderr.on('data', (d) => console.log(`[${label}]`, d.toString().trim()));
+    child.on('error', (err) => console.error(`[${label}] process error:`, err?.message));
+
+    /* A backend that stayed up long enough to serve traffic has proven itself;
+       reset the backoff so a single late crash restarts promptly rather than
+       inheriting a 30s delay earned hours earlier. */
+    const startedAt = Date.now();
+    child.on('exit', (code, signal) => {
+      state.child = null;
+      console.log(`[${label}] exited code=${code} signal=${signal}`);
+      if (shuttingDown) return;
+      if (Date.now() - startedAt > 60_000) state.attempts = 0;
+      scheduleRestart();
+    });
+  };
+
+  const scheduleRestart = () => {
+    if (shuttingDown || state.timer) return;
+    state.attempts += 1;
+    const delay = Math.min(30_000, 2_000 * 2 ** Math.min(state.attempts - 1, 4));
+    console.warn(`[${label}] restarting in ${delay}ms (attempt ${state.attempts})`);
+    state.timer = setTimeout(launch, delay);
+  };
+
+  launch();
+
+  return {
+    stop() {
+      if (state.timer) {
+        clearTimeout(state.timer);
+        state.timer = null;
+      }
+      killTree(state.child, label);
+      state.child = null;
+    },
+  };
+}
+
+let backendSupervisors = [];
+
+/* Probe a port and decide what, if anything, is on it.
+      'free'    — nothing listening, ours to start.
+      'ours'    — our backend is already up (an operator running it in a
+                  terminal is normal); leave it alone.
+      'foreign' — something else has the port. Our backend cannot bind while
+                  that is true, so say so plainly rather than letting the
+                  operator wonder why generation fails.
+
+   Identity matters here, not just whether the port answers: a stray service on
+   8000 looks exactly like a healthy backend to a bare TCP connect, and
+   skipping the launch on that basis leaves the booth with no backend at all
+   and nothing in the log to explain it. */
+function probeBackendPort(port, healthPath, marker, timeoutMs = 2000) {
+  return new Promise((resolve) => {
+    let settled = false;
+    const finish = (verdict) => {
+      if (settled) return;
+      settled = true;
+      resolve(verdict);
+    };
+
+    const req = http.get(
+      { host: '127.0.0.1', port, path: healthPath, timeout: timeoutMs },
+      (res) => {
+        /* A liveness endpoint is a poor fingerprint — a two-line stub server
+           can return the same {"status":"ok"} our /health does, and trusting it
+           would make the booth skip launching its real backend and then fail
+           every generation with nothing in the log. So the probe asks for
+           something only the real service can produce: the API's own route
+           table, or ComfyUI's device list. */
+        let body = '';
+        res.setEncoding('utf8');
+        res.on('data', (chunk) => {
+          if (settled) return;
+          body += chunk;
+          // Stop as soon as the answer is known; these documents run to tens
+          // of kilobytes and there is no reason to buffer all of it.
+          if (body.includes(marker)) {
+            res.destroy();
+            finish('ours');
+          } else if (body.length > 512 * 1024) {
+            res.destroy();
+            finish('foreign');
+          }
+        });
+        res.on('end', () => finish(body.includes(marker) ? 'ours' : 'foreign'));
+        res.on('error', () => finish('foreign'));
+      },
     );
-    comfyuiProcess.stdout.on('data', d => console.log('[ComfyUI]', d.toString().trim()));
-    comfyuiProcess.stderr.on('data', d => console.log('[ComfyUI]', d.toString().trim()));
-    comfyuiProcess.on('exit', code => console.log(`[ComfyUI] exited with code ${code}`));
+    req.on('timeout', () => {
+      req.destroy();
+      finish('foreign');
+    });
+    req.on('error', (err) => {
+      // ECONNREFUSED is the good case: nobody is home, so we start it.
+      finish(err?.code === 'ECONNREFUSED' ? 'free' : 'foreign');
+    });
+  });
+}
+
+async function startBackends() {
+  stopBackends();
+  shuttingDown = false;
+  backendSupervisors = [];
+
+  const services = [
+    {
+      label: 'FastAPI',
+      port: 8000,
+      // /openapi.json lists every route this API serves; "/generate" appears
+      // in no other service on this machine.
+      healthPath: '/openapi.json',
+      marker: '"/generate"',
+      command: `${APP_DIR}\\venv\\Scripts\\python.exe`,
+      args: ['-m', 'uvicorn', 'main:app', '--host', '127.0.0.1', '--port', '8000'],
+      cwd: FASTAPI_DIR,
+      missing: 'Python not found at the shared venv.',
+    },
+    {
+      label: 'ComfyUI',
+      port: 8188,
+      healthPath: '/system_stats',
+      marker: '"devices"',
+      command: resolveComfyPython(),
+      args: ['main.py', '--listen', '127.0.0.1', '--port', '8188'],
+      cwd: COMFYUI_DIR,
+      missing: 'Python not found. Run the setup script to create the venv.',
+    },
+  ];
+
+  for (const service of services) {
+    if (!fs.existsSync(service.command)) {
+      console.error(`[${service.label}] ${service.missing}`, service.command);
+      continue;
+    }
+
+    const occupant = await probeBackendPort(
+      service.port,
+      service.healthPath,
+      service.marker,
+    );
+
+    if (occupant === 'ours') {
+      console.log(
+        `[${service.label}] Already running on port ${service.port} — leaving it alone.`,
+      );
+      continue;
+    }
+
+    if (occupant === 'foreign') {
+      /* Supervised anyway rather than skipped: the launch will fail on
+         "address already in use", which lands in the log next to this line and
+         names the real problem, and if the squatter ever goes away the retry
+         picks the port up without anyone restarting the booth. */
+      console.error(
+        `[${service.label}] Port ${service.port} is held by something that is not the ` +
+          `photo booth backend. ${service.label} cannot start until that process is ` +
+          `closed. Find it with:  netstat -ano | findstr :${service.port}`,
+      );
+    }
+
+    if (shuttingDown) return;
+    backendSupervisors.push(superviseBackend(service));
   }
 }
 
 function stopBackends() {
-  if (fastapiProcess) {
-    try { fastapiProcess.kill('SIGTERM'); } catch {}
-    fastapiProcess = null;
+  shuttingDown = true;
+  for (const supervisor of backendSupervisors) {
+    try { supervisor.stop(); } catch { /* best effort on the way out */ }
   }
-  if (comfyuiProcess) {
-    try { comfyuiProcess.kill('SIGTERM'); } catch {}
-    comfyuiProcess = null;
-  }
+  backendSupervisors = [];
 }
 
 // Kill backends when Electron exits for any reason
@@ -923,57 +1145,333 @@ document.addEventListener('keydown', e => {
   });
 
   win.setMenu(null);
+  // The kiosk window sits at the 'screen-saver' always-on-top level, so a
+  // plain window opens *behind* it and looks like the gallery never launched.
+  // Matching the level puts this one on top, being the newer window.
+  win.setAlwaysOnTop(true, 'screen-saver');
   win.loadURL('data:text/html;charset=utf-8,' + encodeURIComponent(html));
 });
 
+/* ---- Launch at logon ----
+   Registers the packaged .exe under the per-user Run key so the booth comes
+   back on its own after a Windows restart. Per-user rather than machine-wide
+   deliberately: it needs no admin rights and no installer step, so a venue
+   machine that gets rebuilt only has to run the app once.
+
+   Skipped when running under `electron-forge start`, where execPath is the
+   electron.exe dev binary and registering it would launch a bare Electron
+   window at logon. The watchdog scheduled task (scripts/install-kiosk-autostart
+   .ps1) is the belt-and-braces version of this and also covers crash relaunch. */
+function configureAutoLaunch() {
+  if (process.platform !== 'win32') return;
+  if (!app.isPackaged) {
+    console.log('[AutoLaunch] skipped — not a packaged build');
+    return;
+  }
+  try {
+    app.setLoginItemSettings({
+      openAtLogin: true,
+      path: process.execPath,
+      args: [],
+    });
+    console.log('[AutoLaunch] registered:', process.execPath);
+  } catch (err) {
+    console.error('[AutoLaunch] could not register:', err?.message);
+  }
+}
+
+/* ---- Display / screensaver suppression ----
+   The booth sits idle between guests for long stretches. Windows must not blank
+   the screen, dim it, start a screensaver or sleep the machine during those —
+   the idle hero video IS the attract loop, and it has to stay visible.
+
+   'prevent-display-sleep' implies 'prevent-app-suspension', so this one blocker
+   covers both the display and the system. It is re-armed on resume because a
+   blocker started before a sleep/hibernate does not always survive it. */
+let powerBlockerId = null;
+
+function armPowerBlocker() {
+  try {
+    if (powerBlockerId !== null && powerSaveBlocker.isStarted(powerBlockerId)) return;
+    powerBlockerId = powerSaveBlocker.start('prevent-display-sleep');
+    console.log('[Power] display-sleep blocker armed id=%d', powerBlockerId);
+  } catch (err) {
+    console.error('[Power] could not start power save blocker:', err?.message);
+  }
+}
+
+function releasePowerBlocker() {
+  try {
+    if (powerBlockerId !== null && powerSaveBlocker.isStarted(powerBlockerId)) {
+      powerSaveBlocker.stop(powerBlockerId);
+    }
+  } catch { /* shutting down anyway */ }
+  powerBlockerId = null;
+}
+
+/* ---- Deliberate-quit flag ----
+   The watchdog scheduled task relaunches the booth whenever the process
+   disappears — which is the whole point, except when the operator just chose
+   "Quit booth" from the Escape prompt. Without a way to tell those apart the
+   booth would come straight back a few seconds later and could never be
+   closed. The app drops this file on an intentional exit and clears it on every
+   start; the watchdog reads it and stands down. Path is shared by contract with
+   scripts/kiosk-watchdog.ps1 — change both together. */
+const STOP_FLAG_PATH = path.join(
+  process.env.LOCALAPPDATA || app.getPath('userData'),
+  'CatherineKiosk',
+  'stop.flag',
+);
+
+function writeStopFlag(reason) {
+  try {
+    fs.mkdirSync(path.dirname(STOP_FLAG_PATH), { recursive: true });
+    fs.writeFileSync(STOP_FLAG_PATH, `${new Date().toISOString()} ${reason}\n`, 'utf8');
+  } catch (err) {
+    console.error('[Kiosk] could not write stop flag:', err?.message);
+  }
+}
+
+function clearStopFlag() {
+  try {
+    fs.rmSync(STOP_FLAG_PATH, { force: true });
+  } catch { /* nothing there is the normal case */ }
+}
+
+/* ---- Intentional quit ----
+   Every other close path is refused while in kiosk mode: Alt+F4, a stray
+   window.close(), the renderer crashing. The booth only exits when an operator
+   confirms it, or when the hold-Escape escape hatch fires. */
+let allowQuit = WINDOWED;
+
+function quitBooth(reason) {
+  console.log('[Kiosk] quit requested:', reason);
+  allowQuit = true;
+  shuttingDown = true;
+  writeStopFlag(reason);
+  releasePowerBlocker();
+  stopBackends();
+  app.quit();
+}
+
+let mainWindow = null;
+
 const createWindow = () => {
-  const mainWindow = new BrowserWindow({
-    width: 685,
-    height: 1214,
-    useContentSize: true,
-    minWidth: 480,
-    minHeight: Math.round((480 * 1214) / 685),
+  mainWindow = new BrowserWindow({
+    // Kiosk: borderless fullscreen on the primary display, above the taskbar.
+    // Windowed (dev): the original 685x1214 portrait box.
+    ...(KIOSK
+      ? { fullscreen: true, frame: false, kiosk: true, resizable: false, movable: false }
+      : {
+          width: 685,
+          height: 1214,
+          useContentSize: true,
+          minWidth: 480,
+          minHeight: Math.round((480 * 1214) / 685),
+          titleBarStyle: process.platform === 'darwin' ? 'hiddenInset' : 'default',
+        }),
     show: false,
-    backgroundColor: '#F5F2ED',
-    titleBarStyle: process.platform === 'darwin' ? 'hiddenInset' : 'default',
+    autoHideMenuBar: true,
+    backgroundColor: '#0D0B1A',
     webPreferences: {
       preload: MAIN_WINDOW_PRELOAD_WEBPACK_ENTRY,
       contextIsolation: true,
       nodeIntegration: false,
+      // Guests never need to scroll-zoom or pinch-zoom the booth, and a stray
+      // touch gesture that zooms the UI to 150% strands the operator.
+      zoomFactor: 1,
     },
   });
 
-  // Locks resizing to the kiosk's 685x1214 portrait ratio — without this the
-  // window can be dragged into an off-ratio shape, which shifts object-fit:
-  // cover's crop axis on the idle video from side-cropping (by design) to
-  // top/bottom-cropping, cutting into the mascot at the bottom of frame.
-  //
-  // 1214px of content height exceeds a 1080p work area, so the requested size
-  // above gets its height clamped and its width left alone — landing off-ratio
-  // before the user has touched anything. Shrink to the largest box that both
-  // fits and holds the ratio, then lock.
-  const fitted = fitKioskShape(mainWindow);
-  mainWindow.setContentSize(fitted.width, fitted.height, false);
-  mainWindow.setAspectRatio(KIOSK_RATIO);
-  mainWindow.center();
+  mainWindow.setMenuBarVisibility(false);
+
+  if (KIOSK) {
+    // 'screen-saver' is the level that actually clears the Windows taskbar and
+    // toast notifications; plain alwaysOnTop still lets the taskbar surface on
+    // hover at the screen edge.
+    mainWindow.setAlwaysOnTop(true, 'screen-saver');
+  } else {
+    // Locks resizing to the kiosk's 685x1214 portrait ratio — without this the
+    // window can be dragged into an off-ratio shape, which shifts object-fit:
+    // cover's crop axis on the idle video from side-cropping (by design) to
+    // top/bottom-cropping, cutting into the mascot at the bottom of frame.
+    //
+    // 1214px of content height exceeds a 1080p work area, so the requested size
+    // above gets its height clamped and its width left alone — landing
+    // off-ratio before the user has touched anything. Shrink to the largest box
+    // that both fits and holds the ratio, then lock.
+    const fitted = fitKioskShape(mainWindow);
+    mainWindow.setContentSize(fitted.width, fitted.height, false);
+    mainWindow.setAspectRatio(KIOSK_RATIO);
+    mainWindow.center();
+  }
+
+  /* ---- Keyboard lockdown ----
+     A keyboard is attached for the operator, so every Chromium accelerator that
+     can break the booth has to be swallowed: reload (which would drop a guest
+     mid-flow), devtools, print, zoom, close. Escape is the one key that does
+     something, and what it does is ask the renderer to put up the quit prompt. */
+  const escState = { holdTimer: null };
+
+  const clearEscHold = () => {
+    if (escState.holdTimer) {
+      clearTimeout(escState.holdTimer);
+      escState.holdTimer = null;
+    }
+  };
+
+  mainWindow.webContents.on('before-input-event', (event, input) => {
+    if (input.type !== 'keyDown' && input.type !== 'keyUp') return;
+    // Windowed dev mode keeps every normal shortcut, devtools included.
+    if (!KIOSK) return;
+
+    const key = (input.key || '').toLowerCase();
+    const mod = input.control || input.meta;
+
+    if (input.type === 'keyUp') {
+      if (key === 'escape') clearEscHold();
+      return;
+    }
+
+    if (key === 'escape') {
+      // `isAutoRepeat` fires continuously while held; only the first press
+      // starts the hold timer.
+      if (input.isAutoRepeat) return;
+
+      /* Deliberately NOT preventDefault'ed, and deliberately not forwarded to
+         the renderer as an exit request either. Escape already closes the
+         admin panel's own dialogs, and swallowing it here would break every
+         one of them. The renderer decides what a given Escape means — dismiss
+         the dialog on screen, or open the quit prompt when there isn't one —
+         in ExitConfirmModal.
+
+         What main keeps is the escape hatch: if the renderer has hung or
+         crashed it can neither close a dialog nor draw the quit prompt, and
+         the operator would be left with a frozen full-screen window and no
+         title bar. Holding Escape for three seconds quits regardless. */
+      clearEscHold();
+      escState.holdTimer = setTimeout(() => {
+        escState.holdTimer = null;
+        quitBooth('escape held 3s');
+      }, 3000);
+      return;
+    }
+
+    const blockedWithMod = ['r', 'w', 'q', 'p', 'f', 'g', 'u', 'j', 'n', 't', '+', '-', '=', '0'];
+    if (mod && blockedWithMod.includes(key)) {
+      event.preventDefault();
+      return;
+    }
+    if (mod && input.shift && ['i', 'c', 'j', 'r'].includes(key)) {
+      event.preventDefault();
+      return;
+    }
+    if (['f5', 'f11', 'f12'].includes(key)) {
+      event.preventDefault();
+      return;
+    }
+    if (input.alt && key === 'f4') {
+      event.preventDefault();
+    }
+  });
+
+  // Right-click has no purpose in the booth and the default menu offers Reload.
+  mainWindow.webContents.on('context-menu', (event) => {
+    if (KIOSK) event.preventDefault();
+  });
+
+  // Nothing in the booth should ever open a second window or navigate away.
+  mainWindow.webContents.setWindowOpenHandler(({ url }) => {
+    if (/^https?:/i.test(url)) shell.openExternal(url).catch(() => {});
+    return { action: 'deny' };
+  });
+
+  /* ---- Close refusal ----
+     Alt+F4 is intercepted above, but Windows can still deliver a close via the
+     shell (task view, "close window" from the taskbar preview). In kiosk mode
+     the only close that goes through is one quitBooth() authorised. */
+  mainWindow.on('close', (event) => {
+    if (!allowQuit) {
+      event.preventDefault();
+      if (!mainWindow.isDestroyed()) mainWindow.webContents.send('kiosk:exit-request');
+    }
+  });
+
+  /* ---- Crash recovery ----
+     A renderer crash used to leave a white window that only a human could fix.
+     Reloading in place is enough: the booth reboots into the idle screen, which
+     is where an interrupted guest session should land anyway. */
+  mainWindow.webContents.on('render-process-gone', (_event, details) => {
+    console.error('[Kiosk] renderer gone:', details?.reason, details?.exitCode);
+    if (allowQuit || mainWindow.isDestroyed()) return;
+    setTimeout(() => {
+      if (mainWindow && !mainWindow.isDestroyed()) mainWindow.reload();
+    }, 1000);
+  });
+
+  mainWindow.webContents.on('unresponsive', () => {
+    console.error('[Kiosk] renderer unresponsive — reloading');
+    if (allowQuit || mainWindow.isDestroyed()) return;
+    mainWindow.reload();
+  });
+
+  mainWindow.webContents.on('did-fail-load', (_e, errorCode, errorDescription, _url, isMainFrame) => {
+    if (!isMainFrame || allowQuit) return;
+    console.error('[Kiosk] load failed:', errorCode, errorDescription, '— retrying');
+    setTimeout(() => {
+      if (mainWindow && !mainWindow.isDestroyed()) mainWindow.loadURL(MAIN_WINDOW_WEBPACK_ENTRY);
+    }, 1500);
+  });
 
   mainWindow.loadURL(MAIN_WINDOW_WEBPACK_ENTRY);
   mainWindow.once('ready-to-show', () => {
     mainWindow.show();
+    if (KIOSK) mainWindow.focus();
   });
 };
 
-app.whenReady().then(() => {
-  startBackends();
-  registerGmailIpc({ app, ipcMain, shell });
-  createWindow();
+/* The renderer's quit prompt reports back here. */
+ipcMain.on('kiosk:exit-confirm', () => quitBooth('operator confirmed'));
+ipcMain.on('kiosk:exit-cancel', () => {
+  /* Nothing to undo — the hold timer clears itself on Escape keyUp. Kept as an
+     explicit channel so the renderer is not silently talking to a dead handler. */
+});
 
-  app.on('activate', () => {
-    if (BrowserWindow.getAllWindows().length === 0) {
-      createWindow();
+if (gotSingleInstanceLock) {
+  app.on('second-instance', () => {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      if (mainWindow.isMinimized()) mainWindow.restore();
+      mainWindow.show();
+      mainWindow.focus();
     }
   });
+
+  app.whenReady().then(() => {
+    // Starting at all means the booth is meant to be running; anything the last
+    // shutdown left behind is stale.
+    clearStopFlag();
+    armPowerBlocker();
+    startBackends();
+    registerGmailIpc({ app, ipcMain, shell });
+    createWindow();
+    configureAutoLaunch();
+
+    app.on('activate', () => {
+      if (BrowserWindow.getAllWindows().length === 0) {
+        createWindow();
+      }
+    });
+  });
+}
+
+/* A resume from sleep/hibernate can leave the blocker inert; re-arm it. */
+app.on('ready', () => {
+  const { powerMonitor } = require('electron');
+  powerMonitor.on('resume', armPowerBlocker);
+  powerMonitor.on('unlock-screen', armPowerBlocker);
 });
+
+app.on('before-quit', releasePowerBlocker);
 
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') {
