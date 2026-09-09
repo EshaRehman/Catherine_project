@@ -64,17 +64,31 @@ Write-Host ''
 # ---------------------------------------------------------------
 Write-Host '[1/3] Registering the startup task...' -ForegroundColor Yellow
 
-$argumentList = @(
-    '-NoProfile'
-    '-ExecutionPolicy', 'Bypass'
-    '-WindowStyle', 'Hidden'
-    '-File', "`"$watchdog`""
-)
-if ($ExePath) { $argumentList += @('-ExePath', "`"$ExePath`"") }
+<# Launched through wscript rather than powershell.exe directly.
+
+   Running powershell.exe as the task action gives the watchdog a console, and
+   because the watchdog starts the booth, Electron and both Python backends
+   inherit it - so a terminal full of ComfyUI and uvicorn output sits on the
+   desktop looking spare. Closing it kills the watchdog and everything under it,
+   and from then on nothing restarts the booth however it is launched. That is
+   the bug this exists to prevent, and it is not cosmetic.
+
+   -WindowStyle Hidden does not fix it (the console exists before PowerShell
+   reads the flag), and hiding it from inside the script needs Add-Type to
+   compile at runtime, which was observed not to take on a booth. The VBS shim
+   creates the process with its window hidden from the outset, so there is
+   nothing to hide, no flash, and nothing for an operator to close. #>
+$launcher = Join-Path $scriptDir 'kiosk-watchdog-launcher.vbs'
+if (-not (Test-Path $launcher)) {
+    throw "kiosk-watchdog-launcher.vbs not found next to this script (looked in $scriptDir)."
+}
+
+$launchArgs = "`"$launcher`" `"$watchdog`""
+if ($ExePath) { $launchArgs += " `"$ExePath`"" }
 
 $action = New-ScheduledTaskAction `
-    -Execute 'powershell.exe' `
-    -Argument ($argumentList -join ' ')
+    -Execute 'wscript.exe' `
+    -Argument $launchArgs
 
 # A short delay lets the shell, the display driver and the network finish
 # coming up first; launching into a half-initialised session is how you get a
