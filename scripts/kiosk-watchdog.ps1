@@ -33,10 +33,41 @@
 param(
     [string] $ExePath,
     [int]    $PollSeconds = 5,
-    [int]    $RestartDelaySeconds = 5
+    [int]    $RestartDelaySeconds = 5,
+    # Debugging only: keeps the console visible so you can watch the log live.
+    [switch] $ShowConsole
 )
 
 $ErrorActionPreference = 'Stop'
+
+<# Hide our own console window.
+
+   The task already passes -WindowStyle Hidden, and it does not work: Task
+   Scheduler allocates the console for powershell.exe before PowerShell can
+   apply that flag, so the watchdog runs with a visible window. The booth and
+   both backends then inherit it for their output, which makes it look like a
+   normal terminal somebody can close - and closing it kills the watchdog and
+   every process under it. That is exactly how the booth ended up unsupervised
+   after a single restart.
+
+   The console is hidden rather than removed: child processes still need
+   somewhere to write, and a hidden window cannot be closed by an operator who
+   thinks it is spare. #>
+if (-not $ShowConsole) {
+    try {
+        Add-Type -Name Win -Namespace Native -MemberDefinition @'
+[DllImport("kernel32.dll")] public static extern System.IntPtr GetConsoleWindow();
+[DllImport("user32.dll")]   public static extern bool ShowWindow(System.IntPtr h, int c);
+'@
+        $consoleHandle = [Native.Win]::GetConsoleWindow()
+        if ($consoleHandle -ne [IntPtr]::Zero) {
+            [Native.Win]::ShowWindow($consoleHandle, 0) | Out-Null   # 0 = SW_HIDE
+        }
+    } catch {
+        # Not fatal - a visible window is worse than no window, but far better
+        # than no watchdog.
+    }
+}
 
 $StopFlag = Join-Path $env:LOCALAPPDATA 'CatherineKiosk\stop.flag'
 $LogPath  = Join-Path $env:LOCALAPPDATA 'CatherineKiosk\watchdog.log'
