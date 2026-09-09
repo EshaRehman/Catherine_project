@@ -1272,12 +1272,10 @@ let mainWindow = null;
    NOT closed: the backends stay up and a guest session in flight survives, so
    there is nothing for the watchdog to relaunch and no fight over the desktop.
 
-   Deliberately one-way. Putting a window back INTO kiosk at runtime does not
-   work on Windows: measured, setKiosk(true) after leaving reports fullscreen
-   and drops the frame, but the page keeps rendering at the small window size —
-   a frameless box with no way to close it. Getting back to fullscreen means
-   closing the booth and letting the watchdog start it again, which lands in a
-   properly sized kiosk. */
+   Reversible — see enterKiosk below. Note the window lands at Electron's
+   default 800x600 rather than filling the screen, because a window created
+   fullscreen has no earlier size to restore to. That looks broken but is not:
+   fullscreen comes back correctly. */
 function leaveKiosk() {
   if (!mainWindow || mainWindow.isDestroyed()) return;
   kioskActive = false;
@@ -1287,6 +1285,31 @@ function leaveKiosk() {
   mainWindow.setResizable(true);
   mainWindow.setMovable(true);
   console.log('[Kiosk] left kiosk mode — title bar and taskbar are back');
+}
+
+/* ---- Back into kiosk: the maximize button, or F11 ----
+   Measured on Windows 11 (1920x1080): after leaveKiosk(), setFullScreen(true)
+   puts the PAGE back to a true 1920x1080 with the frame gone and the taskbar
+   covered. An earlier version of this file claimed that re-entry left the page
+   rendering at the old small size; that does not reproduce.
+
+   Fullscreen is set BEFORE resizable is locked off again: a non-resizable
+   window is the one shape Windows will refuse to grow, and locking first is the
+   most likely explanation for the earlier reading.
+
+   Why hook 'maximize' at all: maximize and fullscreen are different states, and
+   maximize by definition leaves the taskbar showing — measured at 1920x1009,
+   the missing 71px being the taskbar. On a booth nobody wants that window, so
+   the maximize button is treated as "go back to kiosk". */
+function enterKiosk() {
+  if (!mainWindow || mainWindow.isDestroyed()) return;
+  if (mainWindow.isMaximized()) mainWindow.unmaximize();
+  mainWindow.setFullScreen(true);
+  mainWindow.setAlwaysOnTop(true, 'screen-saver');
+  mainWindow.setResizable(false);
+  mainWindow.setMovable(false);
+  kioskActive = true;
+  console.log('[Kiosk] back in kiosk mode — title bar and taskbar hidden');
 }
 
 const createWindow = () => {
@@ -1362,6 +1385,20 @@ const createWindow = () => {
 
   mainWindow.webContents.on('before-input-event', (event, input) => {
     if (input.type !== 'keyDown' && input.type !== 'keyUp') return;
+
+    /* F11 is the one key that still means something once out of kiosk: the
+       universal "make this fullscreen". Handled here rather than left to
+       Chromium because Chromium's own F11 only sets fullscreen — it would not
+       restore always-on-top, so the taskbar would still surface on hover.
+       Escape is deliberately NOT the way back: it is the way OUT, and the admin
+       panel's dialogs all use it. */
+    if (KIOSK && !kioskActive && input.type === 'keyDown'
+        && (input.key || '').toLowerCase() === 'f11') {
+      event.preventDefault();
+      enterKiosk();
+      return;
+    }
+
     /* Windowed dev mode keeps every normal shortcut, devtools included — and so
        does a booth an operator has escaped out of kiosk mode, which is a
        maintenance window by definition. */
@@ -1438,6 +1475,14 @@ const createWindow = () => {
 
      To reach the desktop WITHOUT the booth restarting, press Escape once: that
      minimises it and leaves everything running. */
+  /* The maximize button on the title bar an operator gets after Escape. Windows
+     maximize leaves the taskbar showing (measured: 1920x1009 of a 1080 screen),
+     which on a booth reads as the kiosk being broken. Treat it as "back to
+     kiosk" instead — that is what anyone pressing it actually wants. */
+  mainWindow.on('maximize', () => {
+    if (KIOSK && !kioskActive) enterKiosk();
+  });
+
   mainWindow.on('close', (event) => {
     if (allowQuit) return;
     event.preventDefault();
