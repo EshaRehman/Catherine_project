@@ -30,7 +30,15 @@ const IDLE_TIMEOUT_MS = {
   templates: 90_000,
   'camera-ready': 90_000,
   camera: 90_000,
-  result: 90_000,
+  /* `result` deliberately has NO timeout. The guest has just watched their
+     picture appear and is looking at it; snatching it away and returning to the
+     welcome screen on a timer is the one thing that reliably annoys people.
+     They leave by tapping on, which is an explicit choice.
+
+     The cost of this is real and worth knowing: a guest who walks away leaves
+     their photo on screen until somebody taps. The next guest taps through it,
+     so the booth is never bricked — but a passer-by can see the last picture
+     taken. If that matters at a venue, put `result: 90_000` back. */
   // Long enough to unlock a phone, open the camera and frame the code.
   qr: 120_000,
 };
@@ -195,10 +203,35 @@ export function KioskApp() {
     return () => clearTimeout(id);
   }, [phase, subjectDataUrl]);
 
+  /* Re-read templates and events at the start of every guest, so a template
+     edited in admin — a new logo, changed caption, moved text — is live on the
+     very next generation instead of at the next app restart.
+
+     The startup effect above fetches once and stops. Leaving admin happens to
+     refetch too, because App.jsx swaps KioskApp out for AdminApp and back,
+     remounting it. But that is a side effect of the routing, not a guarantee:
+     it does nothing for a template edited from another machine, and it would
+     quietly stop working the day admin becomes an overlay rather than a swap.
+     Two small GETs per guest is a cheap way not to depend on it.
+
+     Fire-and-forget on purpose: the guest moves to template selection now. A
+     failed refresh leaves the previously loaded catalogue in place, which is
+     strictly better than blocking the booth on a network hiccup. */
+  const refreshCatalog = useCallback(async () => {
+    const [resTemplates, resEvents] = await Promise.all([
+      getTemplates(settings.aiMode),
+      getEvents(settings.aiMode),
+    ]);
+    if (resTemplates.ok) setDbTemplates(mapTemplates(resTemplates.data));
+    if (resEvents.ok) setDbEvents(mapEvents(resEvents.data));
+  }, [settings.aiMode]);
+
   const goStart = useCallback(() => {
     if (kioskTemplates.length === 0) return;
+    refreshCatalog().catch((err) =>
+      console.warn('[KioskApp] template refresh failed; using the catalogue already loaded:', err));
     setPhase('templates');
-  }, [kioskTemplates]);
+  }, [kioskTemplates, refreshCatalog]);
 
   const resetFlow = useCallback(() => {
     setPhase('idle');

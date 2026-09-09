@@ -143,8 +143,30 @@ export function ProcessingScreen({ subjectDataUrl, template, eventId, onDone, on
         try {
           finalUrl = await compositeResultPreview(rawUrl, template, 1080, 1350);
           composited = true;
-        } catch {
+        } catch (err) {
+          /* This used to swallow the error and hand back the bare AI output,
+             which looks exactly like "the template has no branding" — the
+             guest gets an unbranded picture and nothing anywhere says why. */
+          console.error(
+            '[ProcessingScreen] branding composite FAILED — guest gets the un-branded AI output:',
+            err,
+          );
           finalUrl = rawUrl;
+        }
+
+        /* The other way branding goes missing, and the quieter one: the
+           template genuinely carries no caption and no logo, so there is
+           nothing to paint. Says so out loud, with the values, because from
+           the guest's side it is indistinguishable from the failure above. */
+        if (!templateHasOverlay(template)) {
+          console.warn(
+            `[ProcessingScreen] template "${template?.name || '?'}" has no branding to paint —`,
+            'overlayText:', JSON.stringify(template?.overlayText ?? null),
+            '| logoUrl:', template?.logoUrl
+              ? `${String(template.logoUrl).slice(0, 48)}… (${String(template.logoUrl).length} chars)`
+              : null,
+            '— if you set these in the template editor, the kiosk is holding a stale copy.',
+          );
         }
         if (!alive) return;
 

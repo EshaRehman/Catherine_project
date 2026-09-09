@@ -235,10 +235,28 @@ export async function compositeResultPreview(resultDataUrl, template, width = 10
       const lx = (template.logoX / 100) * width - lw / 2;
       const ly = (template.logoY / 100) * height - lh / 2;
       ctx.drawImage(lg, lx, ly, lw, lh);
-    } catch { /* skip */ }
+    } catch (err) {
+      /* Skipping the logo is the right call - the caption and the picture are
+         still worth handing over - but doing it silently meant a broken logo
+         URL looked identical to a template that never had one. */
+      console.error(
+        '[composite] logo failed to load, result will carry no logo:',
+        `${String(template.logoUrl).slice(0, 48)}…`, err,
+      );
+    }
   }
 
-  return canvas.toDataURL('image/jpeg', 0.92);
+  try {
+    return canvas.toDataURL('image/jpeg', 0.92);
+  } catch (err) {
+    /* A canvas tainted by a cross-origin draw throws here, AFTER everything is
+       painted - so the branding is on the canvas and still cannot be read back.
+       loadImage sets crossOrigin='anonymous', which should make a logo without
+       CORS headers fail to load rather than taint; this catch names the case if
+       that assumption ever stops holding. */
+    console.error('[composite] canvas could not be exported (tainted?):', err);
+    throw err;
+  }
 }
 
 /* 4:5, matching the booth output. This was 540x960 (9:16): the idle preview
