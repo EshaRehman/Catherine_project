@@ -33,6 +33,10 @@ if (require('electron-squirrel-startup')) {
 const WINDOWED = process.argv.includes('--windowed') || process.env.CATHERINE_WINDOWED === '1';
 const KIOSK = !WINDOWED;
 
+/* How long Escape has to be held to quit outright. Long enough that the short
+   press (minimise) and the hold (quit) cannot be confused for one another. */
+const ESC_HOLD_QUIT_MS = 5000;
+
 /* One booth, one process. A watchdog relaunch that races the dying instance —
    or an operator double-clicking the shortcut — would otherwise put a second
    copy on screen fighting for the camera and for ports 8000/8188. The second
@@ -1239,10 +1243,16 @@ function clearStopFlag() {
 }
 
 /* ---- Intentional quit ----
-   Every other close path is refused while in kiosk mode: Alt+F4, a stray
-   window.close(), the renderer crashing. The booth only exits when an operator
-   confirms it, or when the hold-Escape escape hatch fires. */
+   Closing is no longer refused: the watchdog relaunches the booth within about
+   ten seconds whatever route it took (scripts/kiosk-watchdog.ps1), so a close
+   is a restart rather than a dark booth. Every close still goes through
+   quitBooth, so FastAPI and ComfyUI go with it instead of being orphaned on
+   ports 8000 and 8188. */
 let allowQuit = WINDOWED;
+
+/* Whether the window is CURRENTLY borderless-fullscreen, as opposed to whether
+   it launched that way (KIOSK). Escape toggles this without closing anything. */
+let kioskActive = KIOSK;
 
 function quitBooth(reason) {
   console.log('[Kiosk] quit requested:', reason);
@@ -1256,12 +1266,41 @@ function quitBooth(reason) {
 
 let mainWindow = null;
 
+/* ---- Esc once: hand the machine back to Windows ----
+   Drops the borderless-fullscreen state, which brings back the title bar (with
+   its minimise and close buttons) and lets the taskbar through. The booth is
+   NOT closed: the backends stay up and a guest session in flight survives, so
+   there is nothing for the watchdog to relaunch and no fight over the desktop.
+
+   Deliberately one-way. Putting a window back INTO kiosk at runtime does not
+   work on Windows: measured, setKiosk(true) after leaving reports fullscreen
+   and drops the frame, but the page keeps rendering at the small window size —
+   a frameless box with no way to close it. Getting back to fullscreen means
+   closing the booth and letting the watchdog start it again, which lands in a
+   properly sized kiosk. */
+function leaveKiosk() {
+  if (!mainWindow || mainWindow.isDestroyed()) return;
+  kioskActive = false;
+  mainWindow.setAlwaysOnTop(false);
+  mainWindow.setKiosk(false);
+  mainWindow.setFullScreen(false);
+  mainWindow.setResizable(true);
+  mainWindow.setMovable(true);
+  console.log('[Kiosk] left kiosk mode — title bar and taskbar are back');
+}
+
 const createWindow = () => {
   mainWindow = new BrowserWindow({
-    // Kiosk: borderless fullscreen on the primary display, above the taskbar.
-    // Windowed (dev): the original 685x1214 portrait box.
+    /* Kiosk: fullscreen on the primary display, above the taskbar.
+       Windowed (dev): the original 685x1214 portrait box.
+
+       The frame is deliberately KEPT rather than set to false. A fullscreen
+       window hides it anyway - measured: getBounds() and getContentBounds()
+       are identical in kiosk mode, so nothing is drawn - and a frame cannot be
+       added to a window at runtime. Without one, Escape could only minimise a
+       borderless window: no title bar and no close button to come back to. */
     ...(KIOSK
-      ? { fullscreen: true, frame: false, kiosk: true, resizable: false, movable: false }
+      ? { fullscreen: true, kiosk: true, resizable: false, movable: false }
       : {
           width: 685,
           height: 1214,
@@ -1310,7 +1349,8 @@ const createWindow = () => {
      A keyboard is attached for the operator, so every Chromium accelerator that
      can break the booth has to be swallowed: reload (which would drop a guest
      mid-flow), devtools, print, zoom, close. Escape is the one key that does
-     something, and what it does is ask the renderer to put up the quit prompt. */
+     something, and it does two different things depending on how long it is
+     held: a press minimises, a five-second hold quits. */
   const escState = { holdTimer: null };
 
   const clearEscHold = () => {
@@ -1322,8 +1362,10 @@ const createWindow = () => {
 
   mainWindow.webContents.on('before-input-event', (event, input) => {
     if (input.type !== 'keyDown' && input.type !== 'keyUp') return;
-    // Windowed dev mode keeps every normal shortcut, devtools included.
-    if (!KIOSK) return;
+    /* Windowed dev mode keeps every normal shortcut, devtools included — and so
+       does a booth an operator has escaped out of kiosk mode, which is a
+       maintenance window by definition. */
+    if (!kioskActive) return;
 
     const key = (input.key || '').toLowerCase();
     const mod = input.control || input.meta;
@@ -1338,22 +1380,23 @@ const createWindow = () => {
       // starts the hold timer.
       if (input.isAutoRepeat) return;
 
-      /* Deliberately NOT preventDefault'ed, and deliberately not forwarded to
-         the renderer as an exit request either. Escape already closes the
-         admin panel's own dialogs, and swallowing it here would break every
-         one of them. The renderer decides what a given Escape means — dismiss
-         the dialog on screen, or open the quit prompt when there isn't one —
-         in ExitConfirmModal.
+      /* Deliberately NOT preventDefault'ed. Escape already closes the admin
+         panel's own dialogs, and swallowing it here would break every one of
+         them. A short press is the renderer's to interpret — dismiss the
+         dialog on screen, or ask main to minimise when there is none — in
+         KioskEscape.
 
-         What main keeps is the escape hatch: if the renderer has hung or
-         crashed it can neither close a dialog nor draw the quit prompt, and
-         the operator would be left with a frozen full-screen window and no
-         title bar. Holding Escape for three seconds quits regardless. */
+         What main keeps is the escape hatch: a renderer that has hung can
+         neither close a dialog nor send that message, and the operator would
+         be left with a frozen full-screen window and no title bar. Holding
+         Escape quits regardless of any of it. The renderer only acts on keyup,
+         so a press long enough to land here never also minimised on the way
+         through. */
       clearEscHold();
       escState.holdTimer = setTimeout(() => {
         escState.holdTimer = null;
-        quitBooth('escape held 3s');
-      }, 3000);
+        quitBooth('escape held 5s');
+      }, ESC_HOLD_QUIT_MS);
       return;
     }
 
@@ -1386,15 +1429,19 @@ const createWindow = () => {
     return { action: 'deny' };
   });
 
-  /* ---- Close refusal ----
-     Alt+F4 is intercepted above, but Windows can still deliver a close via the
-     shell (task view, "close window" from the taskbar preview). In kiosk mode
-     the only close that goes through is one quitBooth() authorised. */
+  /* ---- Close ----
+     The X on the restored window, the taskbar's "close window", a stray
+     Alt+F4: all allowed, because the watchdog puts the booth back within about
+     ten seconds. Routed through quitBooth rather than let through raw, so the
+     backends are killed as a tree instead of surviving to hold ports 8000 and
+     8188 against the relaunch.
+
+     To reach the desktop WITHOUT the booth restarting, press Escape once: that
+     minimises it and leaves everything running. */
   mainWindow.on('close', (event) => {
-    if (!allowQuit) {
-      event.preventDefault();
-      if (!mainWindow.isDestroyed()) mainWindow.webContents.send('kiosk:exit-request');
-    }
+    if (allowQuit) return;
+    event.preventDefault();
+    quitBooth('window closed');
   });
 
   /* ---- Crash recovery ----
@@ -1430,11 +1477,11 @@ const createWindow = () => {
   });
 };
 
-/* The renderer's quit prompt reports back here. */
-ipcMain.on('kiosk:exit-confirm', () => quitBooth('operator confirmed'));
-ipcMain.on('kiosk:exit-cancel', () => {
-  /* Nothing to undo — the hold timer clears itself on Escape keyUp. Kept as an
-     explicit channel so the renderer is not silently talking to a dead handler. */
+/* An Escape the renderer had nothing else to spend on: hand the desktop over.
+   Once out of kiosk the window is an ordinary one, and Escape goes back to
+   meaning nothing in particular. */
+ipcMain.on('kiosk:escape', () => {
+  if (KIOSK && kioskActive) leaveKiosk();
 });
 
 if (gotSingleInstanceLock) {

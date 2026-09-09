@@ -1492,9 +1492,9 @@ export function TemplateEditor() {
 
       {showResultModal && (
         <div
-          /* Marks this as an overlay that owns the Escape key, so the kiosk's
-             quit prompt stays out of the way while it is up (see
-             BLOCKING_OVERLAY_SELECTOR in components/ExitConfirmModal.jsx). */
+          /* Marks this as an overlay that owns the Escape key, so Escape
+             closes this dialog rather than minimising the booth (see
+             BLOCKING_OVERLAY_SELECTOR in components/KioskEscape.jsx). */
           role="dialog"
           aria-modal="true"
           aria-label="Generated result"

@@ -5,10 +5,12 @@
 .DESCRIPTION
     Three things, all reversible with uninstall-kiosk-autostart.ps1:
 
-      1. Registers a scheduled task that runs kiosk-watchdog.ps1 at logon. The
-         watchdog starts the booth and relaunches it if it ever disappears, so
-         a crash or a Windows restart both end with the booth back on the
-         welcome screen without anyone touching the machine.
+      1. Registers a scheduled task that runs kiosk-watchdog.ps1 at logon,
+         on resume from sleep, and on unlock. The watchdog starts the booth
+         and relaunches it whenever it disappears - a crash, a kill, or an
+         operator closing it - so a restart, a lid-open or a stray Alt+F4 all
+         end with the booth back on the welcome screen without anyone
+         touching the machine.
 
       2. Turns off the screensaver, monitor blanking, sleep and hibernate for
          this user, so nothing covers or dims the attract loop between guests.
@@ -60,7 +62,7 @@ Write-Host ''
 # ---------------------------------------------------------------
 # 1. Scheduled task: run the watchdog at logon
 # ---------------------------------------------------------------
-Write-Host '[1/3] Registering the logon task...' -ForegroundColor Yellow
+Write-Host '[1/3] Registering the startup task...' -ForegroundColor Yellow
 
 $argumentList = @(
     '-NoProfile'
@@ -77,8 +79,41 @@ $action = New-ScheduledTaskAction `
 # A short delay lets the shell, the display driver and the network finish
 # coming up first; launching into a half-initialised session is how you get a
 # booth with no camera or a window sized to the wrong resolution.
-$trigger = New-ScheduledTaskTrigger -AtLogOn -User $env:USERNAME
-$trigger.Delay = 'PT20S'
+$logonTrigger = New-ScheduledTaskTrigger -AtLogOn -User $env:USERNAME
+$logonTrigger.Delay = 'PT20S'
+
+# Waking from sleep is not a logon, so the trigger above never fires for it. If
+# the watchdog died while the machine slept - or was never started because the
+# PC came back from hibernation rather than a boot - nothing would bring the
+# booth back. These two cover that: the System-log event Windows writes on
+# resume, and the unlock that follows when the lock screen came up. Firing
+# while the watchdog is already running is harmless; -MultipleInstances
+# IgnoreNew below drops the duplicate.
+$taskNamespace = 'Root/Microsoft/Windows/TaskScheduler'
+$extraTriggers = @()
+
+try {
+    $resumeTrigger = New-CimInstance -ClientOnly `
+        -CimClass (Get-CimClass -ClassName MSFT_TaskEventTrigger -Namespace $taskNamespace)
+    $resumeTrigger.Enabled = $true
+    $resumeTrigger.Delay = 'PT15S'
+    $resumeTrigger.Subscription = "<QueryList><Query Id='0' Path='System'><Select Path='System'>*[System[Provider[@Name='Microsoft-Windows-Power-Troubleshooter'] and EventID=1]]</Select></Query></QueryList>"
+    $extraTriggers += $resumeTrigger
+
+    $unlockTrigger = New-CimInstance -ClientOnly `
+        -CimClass (Get-CimClass -ClassName MSFT_TaskSessionStateChangeTrigger -Namespace $taskNamespace)
+    $unlockTrigger.Enabled = $true
+    $unlockTrigger.Delay = 'PT10S'
+    $unlockTrigger.StateChange = 8      # SessionUnlock
+    $unlockTrigger.UserId = "$env:USERDOMAIN\$env:USERNAME"
+    $extraTriggers += $unlockTrigger
+} catch {
+    Write-Host "      Could not add the wake/unlock triggers: $($_.Exception.Message)" -ForegroundColor Yellow
+    Write-Host '      The logon trigger still works; the booth just will not be' -ForegroundColor Yellow
+    Write-Host '      re-checked after a resume from sleep.' -ForegroundColor Yellow
+}
+
+$trigger = @($logonTrigger) + $extraTriggers
 
 # ExecutionTimeLimit 0 = never kill it. The default is three days, which would
 # silently end the watchdog on a booth left installed between events.
@@ -89,6 +124,7 @@ $settings = New-ScheduledTaskSettingsSet `
     -ExecutionTimeLimit ([TimeSpan]::Zero) `
     -RestartCount 3 `
     -RestartInterval (New-TimeSpan -Minutes 1) `
+    -StartWhenAvailable `
     -MultipleInstances IgnoreNew
 
 $principal = New-ScheduledTaskPrincipal `
@@ -104,9 +140,10 @@ Register-ScheduledTask `
     -Trigger     $trigger `
     -Settings    $settings `
     -Principal   $principal `
-    -Description 'Starts the Catherine photo booth at logon and relaunches it if it stops unexpectedly.' | Out-Null
+    -Description 'Starts the Catherine photo booth at logon, on resume from sleep and on unlock, and relaunches it whenever it stops.' | Out-Null
 
 Write-Host "      Registered scheduled task '$TaskName'." -ForegroundColor Green
+Write-Host "      Triggers: logon$(if ($extraTriggers.Count) { ', resume from sleep, unlock' })." -ForegroundColor Green
 
 # ---------------------------------------------------------------
 # 2. Screensaver off (per-user, no admin needed)

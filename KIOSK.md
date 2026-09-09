@@ -30,18 +30,36 @@ the admin panel is unaffected. Right-click is disabled.
 
 ---
 
-## 2. Exiting: Escape
+## 2. Getting out: Escape
 
-Press **Esc** → a confirmation appears → **Quit booth** closes everything,
-**Stay in booth** (or a second **Esc**) dismisses it.
+| Gesture | What happens |
+| --- | --- |
+| **Esc** (press) | Drops out of borderless fullscreen. Title bar and taskbar are back, so the window can be minimised, moved or closed like any other — **and the booth keeps running**: backends up, no guest session lost. |
+| **Esc** held **5 seconds** | Quits outright. |
+| The **X**, Alt+F4, taskbar close | Quits. |
+
+Leaving kiosk mode is one-way: to get back to fullscreen, close the booth and
+let the watchdog start it again. Windows will not put a running window back
+into kiosk properly — measured, it reports fullscreen and drops the frame while
+the page keeps rendering at the small window size, which would strand you with
+a frameless box and no close button.
+
+Once the watchdog is installed (section 5) **every quit comes back within about
+ten seconds** — the X and the five-second hold alike. That is the point of it: a
+booth that can be closed and left closed is a dark booth when the next guest
+walks up.
+
+So the press-Escape-once route is the one to use for work on the machine. It
+does not close anything, so there is nothing for the watchdog to relaunch and
+no fight over the desktop. To stop the booth for longer, disable the
+`CatherinePhotoBoothKiosk` task or run `uninstall-kiosk-autostart.ps1`.
 
 Escape still does its normal job inside the admin panel: if a dialog is open,
-Escape closes that dialog and the quit prompt stays out of the way. The quit
-prompt only appears when there is nothing else on screen to dismiss.
+Escape closes that dialog and the booth stays where it is. It only reaches the
+window when there is nothing else on screen to dismiss.
 
-**If the app has frozen** and the prompt will not appear: **hold Esc for three
-seconds**. That quits from the main process and does not depend on the UI
-responding at all.
+**If the app has frozen** the five-second hold still works — it is handled in
+the main process and does not depend on the UI responding at all.
 
 ---
 
@@ -99,8 +117,15 @@ powershell -ExecutionPolicy Bypass -File .\scripts\install-kiosk-autostart.ps1
 That does three things:
 
 1. Registers a scheduled task (`CatherinePhotoBoothKiosk`) that runs
-   `scripts/kiosk-watchdog.ps1` 20 seconds after logon. The watchdog starts the
-   booth and relaunches it within ~10s if it ever disappears.
+   `scripts/kiosk-watchdog.ps1` 20 seconds after logon, 15 seconds after the
+   machine resumes from sleep, and 10 seconds after an unlock. The watchdog
+   starts the booth and relaunches it within ~10s whenever it disappears —
+   crash, kill, or an operator closing it.
+
+   The resume and unlock triggers matter because **waking from sleep is not a
+   logon**: without them, a machine that slept with no watchdog running would
+   wake to a dark booth. A trigger that fires while the watchdog is already
+   running is dropped, so they cost nothing.
 2. Disables the screensaver for this user.
 3. Sets monitor, sleep and hibernate timeouts to Never (needs an elevated
    PowerShell; the script says so if it could not).
@@ -108,10 +133,11 @@ That does three things:
 A packaged build also registers itself under the per-user Run key, so it starts
 at logon even without the task.
 
-**Quitting on purpose stays quit.** The app writes
-`%LOCALAPPDATA%\CatherineKiosk\stop.flag` when you choose *Quit booth*, and the
-watchdog stands down instead of relaunching. The flag is cleared at the next
-logon, so the booth always comes back after a restart.
+**Closing the booth does not keep it closed.** Every exit relaunches in five
+to ten seconds, whatever route it took; the app leaves a note in
+`%LOCALAPPDATA%\CatherineKiosk\stop.flag` saying how it went, which the
+watchdog logs and clears. For desktop access that does not fight the watchdog,
+press Escape once (section 2).
 
 Watchdog log: `%LOCALAPPDATA%\CatherineKiosk\watchdog.log`
 

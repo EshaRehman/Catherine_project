@@ -3,16 +3,17 @@
     Keeps the Catherine photo booth running for the length of an event.
 
 .DESCRIPTION
-    Launches the booth, then watches it. If the process disappears for any
-    reason other than an operator choosing "Quit booth" - a crash, a GPU driver
-    reset, someone killing it in Task Manager - it is started again within a few
-    seconds and comes back on the welcome screen.
+    Launches the booth, then watches it. If the process disappears for ANY
+    reason - a crash, a GPU driver reset, someone killing it in Task Manager,
+    or an operator choosing "Quit booth" - it is started again within a few
+    seconds and comes back on the welcome screen. A booth that can be closed
+    and left closed is a booth that is dark when the next guest walks up.
 
-    Deliberate exits are respected. The app writes
-    %LOCALAPPDATA%\CatherineKiosk\stop.flag when it quits on purpose (see
-    STOP_FLAG_PATH in src/main.js); this script sees that file and stands down
-    instead of fighting the operator. The flag is cleared on the way in, so a
-    fresh logon always starts the booth even if the last shutdown was manual.
+    There is no exit that keeps it closed, by design. To work on the machine,
+    press Escape once in the booth: that drops it out of kiosk mode and
+    minimises it WITHOUT closing it, so the desktop is yours and the watchdog
+    has nothing to relaunch. To stop the booth altogether, disable the
+    scheduled task or run uninstall-kiosk-autostart.ps1.
 
     Run by the scheduled task that install-kiosk-autostart.ps1 registers. Safe
     to run by hand for testing.
@@ -25,7 +26,8 @@
 
 .PARAMETER RestartDelaySeconds
     Pause before relaunching after a crash, so a boot-looping app does not spin
-    the CPU. Default 5.
+    the CPU. Default 5. With the default -PollSeconds that puts a relaunch
+    between five and ten seconds after the booth disappears.
 #>
 [CmdletBinding()]
 param(
@@ -118,20 +120,19 @@ while ($true) {
 
     if (Test-BoothRunning) { continue }
 
+    # Whatever took it down - a crash, Task Manager, the X, a five-second hold
+    # on Escape - the booth is meant to be running, so it comes back. The flag
+    # the app wrote on the way out is only a record of how it went; it is
+    # cleared here so it cannot outlive the exit it describes.
+    $reason = 'no stop flag'
     if (Test-Path $StopFlag) {
-        Write-Log "Booth exited and the stop flag is set - operator quit on purpose. Watchdog stopping."
-        break
+        try { $reason = (Get-Content $StopFlag -Raw -ErrorAction Stop).Trim() } catch { }
+        Remove-Item $StopFlag -Force -ErrorAction SilentlyContinue
     }
 
     $restarts++
-    Write-Log "Booth is not running and no stop flag was set. Restart #$restarts in ${RestartDelaySeconds}s."
+    Write-Log "Booth is not running ($reason). Restart #$restarts in ${RestartDelaySeconds}s."
     Start-Sleep -Seconds $RestartDelaySeconds
-
-    # Re-check: the operator may have quit during the delay.
-    if (Test-Path $StopFlag) {
-        Write-Log "Stop flag appeared during the restart delay. Watchdog stopping."
-        break
-    }
 
     Start-Booth
 }

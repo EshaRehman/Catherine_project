@@ -1,7 +1,13 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import logo from '../assets/logo.png';
 
 const COUNTDOWN_FROM = 8;
+
+/* The width this screen was drawn against. Every size in .cr-* is a plain
+   pixel value at this width; the block is then scaled to fit the actual
+   display, so a 1080x1920 booth panel gets the same layout as the dev window
+   instead of the design stranded at its maximum size in a black screen. */
+const DESIGN_WIDTH = 685;
 
 /* ── Verified human silhouettes (rendered & eyeballed before shipping) ──
    Both are OUTLINE only (fill:none) to match the reference. The trick that
@@ -123,6 +129,38 @@ const INSTRUCTIONS = [
 
 export function CameraReadyScreen({ onReady, onBack }) {
   const [count, setCount] = useState(COUNTDOWN_FROM);
+  const bodyRef = useRef(null);
+
+  /* Fit the block to the screen. CSS cannot do this on its own: scale() takes
+     a unitless number and there is no way to divide a viewport length by a
+     design length to produce one. Whichever axis runs out first wins, so the
+     layout always fits whole and is never cropped.
+
+     The height is measured rather than assumed — offsetHeight is the
+     untransformed layout height, so it does not move when the scale does, and
+     a late web-font load that changes the block's height re-fits it. */
+  useEffect(() => {
+    const body = bodyRef.current;
+    if (!body) return undefined;
+
+    const fit = () => {
+      const height = body.offsetHeight;
+      if (!height) return;
+      body.style.setProperty('--cr-scale', String(Math.min(
+        window.innerWidth / DESIGN_WIDTH,
+        window.innerHeight / height,
+      )));
+    };
+
+    fit();
+    window.addEventListener('resize', fit);
+    const observer = new ResizeObserver(fit);
+    observer.observe(body);
+    return () => {
+      window.removeEventListener('resize', fit);
+      observer.disconnect();
+    };
+  }, []);
 
   useEffect(() => {
     if (count <= 0) {
@@ -228,7 +266,7 @@ export function CameraReadyScreen({ onReady, onBack }) {
         </button>
       </header>
 
-      <div className="cr-body">
+      <div className="cr-body" ref={bodyRef}>
         <img className="cr-logo" src={logo} alt="AI Photo Booth Co" />
 
         <div className="cr-headline">
