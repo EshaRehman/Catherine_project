@@ -115,24 +115,48 @@ function Start-Booth {
 if (-not (Test-BoothRunning)) { Start-Booth }
 
 $restarts = 0
+$ticks = 0
+
+<# The whole body is wrapped, because $ErrorActionPreference is 'Stop' up at the
+   top of this file - deliberately, so a missing exe fails loudly at startup
+   rather than looping uselessly. Inside the loop that setting is a liability:
+   ANY non-terminating error becomes terminating, the script exits, the task
+   goes to 'Ready', and the booth is left with nothing watching it. Observed
+   exactly that - one successful restart, then silence.
+
+   A watchdog that a transient error can kill is not a watchdog. Anything that
+   goes wrong in here is logged and the loop carries on. #>
 while ($true) {
-    Start-Sleep -Seconds $PollSeconds
+    try {
+        Start-Sleep -Seconds $PollSeconds
+        $ticks++
 
-    if (Test-BoothRunning) { continue }
+        # A heartbeat every ~5 minutes. Cheap, and it is the difference between
+        # "the watchdog is fine, nothing has closed" and "the watchdog died
+        # hours ago" when reading this log after the fact.
+        if (($ticks * $PollSeconds) % 300 -lt $PollSeconds) {
+            Write-Log "Alive. Booth running: $(Test-BoothRunning). Restarts so far: $restarts."
+        }
 
-    # Whatever took it down - a crash, Task Manager, the X, a five-second hold
-    # on Escape - the booth is meant to be running, so it comes back. The flag
-    # the app wrote on the way out is only a record of how it went; it is
-    # cleared here so it cannot outlive the exit it describes.
-    $reason = 'no stop flag'
-    if (Test-Path $StopFlag) {
-        try { $reason = (Get-Content $StopFlag -Raw -ErrorAction Stop).Trim() } catch { }
-        Remove-Item $StopFlag -Force -ErrorAction SilentlyContinue
+        if (-not (Test-BoothRunning)) {
+            # Whatever took it down - a crash, Task Manager, the X, a five-second
+            # hold on Escape - the booth is meant to be running, so it comes
+            # back. The flag the app wrote on the way out is only a record of how
+            # it went; it is cleared here so it cannot outlive the exit it
+            # describes.
+            $reason = 'no stop flag'
+            if (Test-Path $StopFlag) {
+                try { $reason = (Get-Content $StopFlag -Raw -ErrorAction Stop).Trim() } catch { }
+                Remove-Item $StopFlag -Force -ErrorAction SilentlyContinue
+            }
+
+            $restarts++
+            Write-Log "Booth is not running ($reason). Restart #$restarts in ${RestartDelaySeconds}s."
+            Start-Sleep -Seconds $RestartDelaySeconds
+            Start-Booth
+        }
+    } catch {
+        Write-Log "Loop error, continuing anyway: $($_.Exception.Message)"
+        Start-Sleep -Seconds $PollSeconds
     }
-
-    $restarts++
-    Write-Log "Booth is not running ($reason). Restart #$restarts in ${RestartDelaySeconds}s."
-    Start-Sleep -Seconds $RestartDelaySeconds
-
-    Start-Booth
 }

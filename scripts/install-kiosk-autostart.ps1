@@ -115,6 +115,26 @@ try {
 
 $trigger = @($logonTrigger) + $extraTriggers
 
+<# Belt and braces for the watchdog itself. The triggers above all fire on an
+   event - logon, resume, unlock - so if the watchdog process dies mid-event
+   with nobody touching the machine, nothing brings it back and the booth is
+   unsupervised for the rest of the day. Observed in the field: the task sat at
+   'Ready' after a single restart.
+
+   A repeating logon trigger fixes that. With -MultipleInstances IgnoreNew
+   below, a repetition while the watchdog is already running is discarded, so
+   this costs nothing in the normal case and restarts it within five minutes in
+   the bad one. RepetitionDuration has to be longer than any event will run;
+   [TimeSpan]::MaxValue is how the scheduler spells "indefinitely". #>
+try {
+    $logonTrigger.RepetitionInterval = New-TimeSpan -Minutes 5
+    $logonTrigger.RepetitionDuration = [TimeSpan]::MaxValue
+} catch {
+    Write-Host "      Could not set the 5-minute re-check: $($_.Exception.Message)" -ForegroundColor Yellow
+    Write-Host '      The watchdog still starts at logon; it just will not be' -ForegroundColor Yellow
+    Write-Host '      restarted automatically if its own process is killed.' -ForegroundColor Yellow
+}
+
 # ExecutionTimeLimit 0 = never kill it. The default is three days, which would
 # silently end the watchdog on a booth left installed between events.
 $settings = New-ScheduledTaskSettingsSet `
