@@ -141,8 +141,15 @@ $trigger = @($logonTrigger) + $extraTriggers
    the bad one. RepetitionDuration has to be longer than any event will run;
    [TimeSpan]::MaxValue is how the scheduler spells "indefinitely". #>
 try {
-    $logonTrigger.RepetitionInterval = New-TimeSpan -Minutes 5
-    $logonTrigger.RepetitionDuration = [TimeSpan]::MaxValue
+    # The property is Repetition, NOT RepetitionInterval - setting the latter
+    # throws "cannot be found on this object", which is exactly what it did on
+    # the booth, silently leaving the watchdog with no backstop. There is no
+    # public constructor for a repetition pattern, so borrow one from a
+    # throwaway -Once trigger. Leaving Duration empty means "indefinitely",
+    # which is what a booth wants; [TimeSpan]::MaxValue is rejected.
+    $repeatSource = New-ScheduledTaskTrigger -Once -At (Get-Date) `
+        -RepetitionInterval (New-TimeSpan -Minutes 5)
+    $logonTrigger.Repetition = $repeatSource.Repetition
 } catch {
     Write-Host "      Could not set the 5-minute re-check: $($_.Exception.Message)" -ForegroundColor Yellow
     Write-Host '      The watchdog still starts at logon; it just will not be' -ForegroundColor Yellow
